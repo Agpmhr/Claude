@@ -67,3 +67,11 @@ Au démarrage, l'Expert écrit pour chaque future : la taille du contrat, le lot
 - Données et journaux sont créés à côté du `.exe`.
 
 ⚠️ N'utilisez **pas** l'Expert et l'application en même temps sur le même compte : vous auriez des positions en double.
+
+## Erreur « (-6, 'Terminal: Authorization failed') » dans Swingbot.exe
+Le module MT5 s'est branché sur un terminal **qui n'est connecté à aucun compte**.
+- Gardez **ouvert** le MT5 connecté à votre compte **démo IC Markets** (en bas à droite : la connexion doit afficher des Ko/s, pas « Pas de connexion »).
+- L'application essaie toute seule **chaque MT5 ouvert** et garde celui qui est connecté. Si plusieurs MT5 sont installés, vous pouvez aussi choisir le bon `terminal64.exe` dans la liste « Terminal MT5 ».
+- Vous pouvez saisir **identifiant + serveur + mot de passe** pour que l'application connecte le terminal elle-même. Le mot de passe n'est **jamais** enregistré.
+- Le bouton **Tester MT5** affiche le compte trouvé et vérifie que WTI, BRENT, DXY et GC existent chez le broker. S'il manque un instrument, il liste les symboles proches.
+- Les fichiers de l'application vont dans le dossier `SwingbotData`, à côté du `.exe`.

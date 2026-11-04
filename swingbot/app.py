@@ -20,7 +20,9 @@ from .paths import ROOT
 
 SETTINGS = ROOT / "swingbot_settings.json"
 DEFAULTS = dict(systeme="v4", broker="mt5", mode="paper", capital=10000.0, risque_pct=0.25, heure_utc="22:15",
-                mt5_suffixe="", mt5_map="", mt5_path="", news="none", confirm_reel="", demarrage_auto=False)
+                mt5_suffixe="", mt5_map="", mt5_path="", mt5_login="", mt5_serveur="", news="none",
+                confirm_reel="", demarrage_auto=False)
+NOT_SAVED = ("confirm_reel", "mt5_mdp")   # jamais écrits sur le disque
 
 
 def load_settings() -> dict:
@@ -48,6 +50,15 @@ def apply_env(s: dict):
         os.environ.pop("SWINGBOT_MT5_MAP", None)
     if s["mt5_path"].strip():
         os.environ["MT5_PATH"] = s["mt5_path"].strip()
+    else:
+        os.environ.pop("MT5_PATH", None)
+    if str(s.get("mt5_login", "")).strip():
+        os.environ["MT5_LOGIN"] = str(s["mt5_login"]).strip()
+        os.environ["MT5_SERVER"] = s.get("mt5_serveur", "").strip()
+        os.environ["MT5_PASSWORD"] = s.get("mt5_mdp", "")
+    else:
+        for k in ("MT5_LOGIN", "MT5_SERVER", "MT5_PASSWORD"):
+            os.environ.pop(k, None)
     if s["mode"] == "live":
         os.environ["SWINGBOT_LIVE_CONFIRM"] = s["confirm_reel"]
     else:
@@ -82,8 +93,14 @@ def make_app():
           elif kind == "combo":
               v = tk.StringVar(value=str(self.s[key]))
               w = ttk.Combobox(parent, textvariable=v, values=values, width=width - 3, state="readonly")
+          elif kind == "combo_edit":
+              v = tk.StringVar(value=str(self.s.get(key, "")))
+              w = ttk.Combobox(parent, textvariable=v, values=values, width=width - 3)
+          elif kind == "password":
+              v = tk.StringVar(value="")
+              w = ttk.Entry(parent, textvariable=v, width=width, show="•")
           else:
-              v = tk.StringVar(value=str(self.s[key]))
+              v = tk.StringVar(value=str(self.s.get(key, "")))
               w = ttk.Entry(parent, textvariable=v, width=width)
           w.grid(row=row, column=1, sticky="w", padx=6, pady=3)
           if help_:
@@ -104,7 +121,16 @@ def make_app():
           self._field(top, r, "Suffixe des symboles MT5", "mt5_suffixe", help_="ex. .a  (vide si aucun)"); r += 1
           self._field(top, r, "Correspondance symboles (JSON)", "mt5_map", width=40,
                       help_='ex. {"WTIF":"WTI_Z6"}  (vide = automatique)'); r += 1
-          self._field(top, r, "Chemin terminal64.exe", "mt5_path", width=40, help_="vide = terminal déjà ouvert"); r += 1
+          try:
+              from .mt5_broker import installed_terminals, running_terminals
+              terms = list(dict.fromkeys(running_terminals() + installed_terminals()))
+          except Exception:
+              terms = []
+          self._field(top, r, "Terminal MT5 (terminal64.exe)", "mt5_path", "combo_edit", [""] + terms, width=52,
+                      help_="vide = détection auto du MT5 ouvert"); r += 1
+          self._field(top, r, "Identifiant compte MT5", "mt5_login", help_="facultatif : connexion automatique"); r += 1
+          self._field(top, r, "Serveur MT5", "mt5_serveur", help_="ex. ICMarketsEU-Demo"); r += 1
+          self._field(top, r, "Mot de passe MT5", "mt5_mdp", "password", help_="jamais enregistré sur le disque"); r += 1
           self._field(top, r, "Lecteur de news (défense)", "news", "combo", ["none", "ollama", "anthropic"]); r += 1
           self._field(top, r, "Confirmation mode RÉEL", "confirm_reel", width=40,
                       help_="taper JE_COMPRENDS_LES_RISQUES (déconseillé)"); r += 1
@@ -147,7 +173,7 @@ def make_app():
           except Exception as e:
               messagebox.showerror("Swingbot", str(e))
               return False
-          SETTINGS.write_text(json.dumps({k: v for k, v in self.s.items() if k != "confirm_reel"}, indent=1),
+          SETTINGS.write_text(json.dumps({k: v for k, v in self.s.items() if k not in NOT_SAVED}, indent=1),
                               encoding="utf-8")
           apply_env(self.s)
           self.write("Réglages enregistrés.")
@@ -208,8 +234,12 @@ def make_app():
                   from .mt5_broker import MT5Broker
                   mode = self.s["mode"] if self.s["mode"] != "paper" else "demo"
                   snap = MT5Broker(mode).snapshot()
-                  self.write(f"MT5 OK : compte {'DÉMO' if snap.get('is_demo') else 'RÉEL'}, équité {snap['balance']:.2f} "
-                             f"{snap.get('currency', '')}, {len(snap['positions'])} position(s) du bot")
+                  self.write(f"MT5 OK : compte {'DÉMO' if snap.get('is_demo') else 'RÉEL'} n°{snap.get('login', '?')} "
+                             f"({snap.get('server', '?')}), équité {snap['balance']:.2f} {snap.get('currency', '')}, "
+                             f"{len(snap['positions'])} position(s) du bot")
+                  from .mt5_broker import check_symbols
+                  for line in check_symbols(mode):
+                      self.write("  " + line)
               except Exception as e:
                   self.write(f"MT5 : échec — {e}")
           threading.Thread(target=work, daemon=True).start()
