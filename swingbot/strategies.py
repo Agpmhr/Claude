@@ -49,6 +49,27 @@ def tsmom(df, lookback=126, stop=3.0, hold=20):
     return ent, held < 0, held > 0, ExitRules(stop_atr=stop, trail_atr=None, max_bars=hold * 6)
 
 
+# ---------------------------------------------------------------- horizon long (semaines -> mois)
+RISK_PREMIUM = ("US500", "NAS100", "GER40", "XAUUSD")
+
+
+def trend_long_only(df, n=200, stop=5.0, sym=None):
+    """Position longue sur les actifs à prime de risque (indices actions, or) tant que le prix est
+    au-dessus de sa moyenne longue ; on sort sous la moyenne. Idée : toucher la prime de risque des
+    actions en évitant le gros des marchés baissiers. Jamais de vente à découvert."""
+    m = df.close.rolling(n).mean()
+    above = df.close > m
+    ent = pd.Series(np.where(above & ~above.shift(1, fill_value=False), 1, 0), index=df.index)
+    # (ré)entrée aussi le premier jour où l'on est au-dessus après une sortie par stop : géré par le moteur
+    ent = pd.Series(np.where(above, 1, 0), index=df.index)
+    return ent, ~above, pd.Series(False, index=df.index), ExitRules(stop_atr=stop, max_bars=10_000)
+
+
+def tsmom_slow(df, lookback=252, hold=21, stop=5.0):
+    """Momentum lent « 12 mois », réévalué une fois par mois, stop très large."""
+    return tsmom(df, lookback=lookback, stop=stop, hold=hold)
+
+
 # ---------------------------------------------------------------- retour à la moyenne
 def mean_reversion(df, n=20, z=2.0, er_max=0.3, stop=2.0):
     """Achète les excès baissiers / vend les excès haussiers, seulement quand le marché est en range."""
@@ -130,6 +151,9 @@ FAMILIES: dict[str, Family] = {f.name: f for f in [
     Family("ma_cross", [dict(fast=f, slow=sl) for f, sl in [(10, 50), (20, 100), (50, 200)]] +
            [dict(fast=20, slow=100, stop=2.0)], fn=ma_cross),
     Family("tsmom", [dict(lookback=lb, hold=h) for lb in (63, 126, 252) for h in (10, 20)], fn=tsmom),
+    Family("trend_long", [dict(n=n, stop=st) for n in (100, 200) for st in (4.0, 6.0)], fn=trend_long_only,
+           kind="long_terme"),
+    Family("tsmom_slow", [dict(lookback=lb) for lb in (189, 252)], fn=tsmom_slow, kind="long_terme"),
     Family("mean_rev", [dict(n=n, z=z) for n in (10, 20) for z in (1.5, 2.0)] + [dict(n=20, z=2.0, er_max=0.2)],
            fn=mean_reversion, kind="range"),
     Family("rsi2", [dict(lo=lo, hi=100 - lo, trend_n=tn) for lo in (5, 10) for tn in (100, 200)], fn=rsi2,

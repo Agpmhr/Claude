@@ -14,7 +14,7 @@ from .instruments import COMMISSION_PER_SIDE, Instrument
 @dataclass
 class CostModel:
     cost_mult: float = 1.0          # 1.5 pour le test de robustesse « coûts x1,5 »
-    exec_spread_mult: float = 2.0   # exécution à l'ouverture D1 (proche du rollover) : spread élargi
+    exec_spread_mult: float = 1.5   # exécution D1 : spread moyen officiel x1,5 (marge de prudence)
     night_spread_mult: float = 4.0  # spread H1 entre 21h et 23h UTC (rollover)
     asia_spread_mult: float = 1.5   # spread H1 entre 23h et 6h UTC
     event_spread_mult: float = 3.0  # jour/heure d'annonce majeure sur la devise
@@ -22,6 +22,7 @@ class CostModel:
     stop_slippage_spreads: float = 1.5  # glissement supplémentaire sur un stop
     commission_side: float = COMMISSION_PER_SIDE
     swaps: bool = True
+    swap_markup_mult: float = 1.0   # multiplie la marge de swap du broker (sensibilité)
 
     def spread(self, inst: Instrument, ts: pd.Timestamp | None = None, tf: str = "D1",
                event: bool = False) -> float:

@@ -93,7 +93,7 @@ def test_triple_swap_wednesday():
     tr, _ = simulate("EURUSD", df, ent, rules=ExitRules(stop_atr=2, max_bars=5),
                      cost=CostModel(cost_mult=0.0), rates=rates)
     t = tr.iloc[0]
-    # 5 nuits dont un mercredi -> 7 nuits facturées ; (0.36+0.015)/360*7 * prix / stop
+    # 5 nuits dont un mercredi -> 7 nuits facturées
     nights = sum(3 if d == 2 else 1 for d in df.index[t.entry_i:t.entry_i + 5].dayofweek)
-    expected = (0.36 + 0.015) / 360 * nights * 1.0 / t.stop_dist
+    expected = 0.36 / 360 * nights * 1.0 / t.stop_dist   # cost_mult=0 annule aussi la marge du broker
     assert abs(t.c_swap - expected) / expected < 1e-6
