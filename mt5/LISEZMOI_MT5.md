@@ -36,3 +36,34 @@ Sécurité :
 - en mode `demo`, il **refuse de trader** si le compte connecté est un compte réel ;
 - le mode réel exige `SWINGBOT_MODE=live` **et** `SWINGBOT_LIVE_CONFIRM=JE_COMPRENDS_LES_RISQUES`.
   Ne le faites pas avant 2 à 3 mois de démo conformes au backtest.
+
+---
+
+## 🆕 L'Expert MT5 « SwingbotV4 » (recommandé : tourne en continu dans MT5)
+
+1. Récupérer `SwingbotV4.ex5`. Il est déjà compilé dans l'onglet **Actions** de GitHub (dernière exécution, section « Artifacts »). Sinon, ouvrir `mt5/SwingbotV4.mq5` dans MetaEditor (touche F4 dans MT5) puis appuyer sur F7.
+2. Dans MT5 : **Fichier → Ouvrir le dossier des données → MQL5 → Experts**, et y copier `SwingbotV4.ex5` (ou le `.mq5`).
+3. Dans le Navigateur (Ctrl+N), clic droit sur « Experts » puis **Actualiser** : *SwingbotV4* apparaît.
+4. Ouvrir un graphique (n'importe lequel, par exemple XAUUSD D1) et glisser *SwingbotV4* dessus.
+   Onglet « Commun » : cocher **Autoriser le trading algorithmique**. Onglet « Paramètres » : tous les réglages sont là.
+5. Dans la barre d'outils, le bouton **Trading algorithmique** doit être vert.
+
+**Deux modes** (paramètre `InpMode`) :
+- **Automatique** (défaut) : l'Expert cherche chez le broker les futures compatibles (WTI, BRENT, GC, DXY), ouvre un **graphique D1 pour chacun**, y dessine les canaux et l'état, et trade chacun **indépendamment**. Il suffit de le poser sur **un seul** graphique.
+- **Graphique** : posez l'Expert sur chaque graphique (WTI, BRENT, GC, DXY) ; chaque copie ne gère que son instrument. Si une copie « Automatique » tourne déjà, les copies « Graphique » ne tradent pas, pour éviter les doublons.
+
+**Le panneau** (en haut à gauche) affiche le compte, l'équité, le drawdown, l'état du coupe-circuit et chaque instrument. Trois boutons : **Pause des entrées**, **Réarmer le coupe-circuit**, **Fermer les positions du bot**.
+
+**Rester actif 24 h/24** : l'Expert tourne tant que MT5 est ouvert. Pour ne jamais l'éteindre, utilisez un VPS : MT5 → clic droit sur le compte → « Enregistrer un serveur virtuel ». Sinon, laissez le PC allumé avec MT5 ouvert. À la réouverture de MT5, les graphiques et l'Expert reviennent tout seuls.
+
+**Journal** : `MQL5\Files\swingbot_journal.csv`, plus l'onglet « Experts » de la boîte à outils.
+Au démarrage, l'Expert écrit pour chaque future : la taille du contrat, le lot minimum, la valeur du tick et l'échéance. **Lisez ces lignes** : si le lot minimum représente trop de risque pour votre capital, les signaux seront refusés et le journal l'indiquera.
+
+## 🆕 L'application Windows « Swingbot.exe » (alternative en Python)
+- Récupérez-la dans l'onglet **Actions** de GitHub (Artifacts « Swingbot-windows ») et placez-la dans un dossier à elle.
+- Double-clic : une fenêtre de réglages s'ouvre (système, mode papier/démo, capital, risque, heure, symboles…).
+- **Démarrer le service** : l'application reste ouverte et lance le bot chaque jour de semaine à l'heure choisie.
+- **Tester MT5** vérifie la connexion au terminal (le terminal doit être ouvert et connecté au compte démo).
+- Données et journaux sont créés à côté du `.exe`.
+
+⚠️ N'utilisez **pas** l'Expert et l'application en même temps sur le même compte : vous auriez des positions en double.

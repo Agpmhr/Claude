@@ -174,17 +174,21 @@ BROKER_NAMES = {"NAS100": "USTEC", "GER40": "DE40",
                 # futures CFD (MT4/MT5 uniquement chez IC Markets) ; ajustable via SWINGBOT_MT5_MAP (JSON)
                 "WTIF": "WTI", "BRENTF": "BRENT", "DXYF": "DXY", "GOLDF": "GC", "VIXF": "VIX",
                 "CORNF": "Corn", "WHEATF": "Wheat", "SOYF": "Sbean", "SUGARF": "Sugar"}
-if os.environ.get("SWINGBOT_MT5_MAP"):
+def _names() -> dict:
+    """Correspondance relue à chaque appel : les réglages de l'application s'appliquent sans redémarrer."""
     import json as _json
-    BROKER_NAMES.update(_json.loads(os.environ["SWINGBOT_MT5_MAP"]))
+    d = dict(BROKER_NAMES)
+    if os.environ.get("SWINGBOT_MT5_MAP"):
+        d.update(_json.loads(os.environ["SWINGBOT_MT5_MAP"]))
+    return d
 
 
 def broker_symbol(sym: str) -> str:
-    return BROKER_NAMES.get(sym, sym)
+    return _names().get(sym, sym)
 
 
 def our_symbol(name: str) -> str:
-    inv = {v: k for k, v in BROKER_NAMES.items()}
+    inv = {v: k for k, v in _names().items()}
     return inv.get(name, name)
 
 

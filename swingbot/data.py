@@ -13,7 +13,7 @@ import pandas as pd
 
 from .instruments import RESEARCH, UNIVERSE
 
-ROOT = Path(__file__).resolve().parents[1]
+from .paths import ROOT  # noqa: E402
 DATA = ROOT / "data"
 
 

@@ -20,7 +20,7 @@ from .calendar_events import event_flags, instrument_ccys, load_events
 from .costs import CostModel
 from .strategies import FAMILIES, config_id
 
-ROOT = Path(__file__).resolve().parents[1]
+from .paths import ROOT  # noqa: E402
 CACHE = ROOT / "results" / "cache"
 
 TRAIN_END = pd.Timestamp("2018-12-31")

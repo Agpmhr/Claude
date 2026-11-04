@@ -181,7 +181,8 @@ def export_history(syms: list[str], bars: int = 5000, out_dir=None, mode: str = 
     Les bougies MT5 d'IC Markets clôturent à 17h New York : c'est le « vrai » jour de trading forex."""
     from pathlib import Path
     mt5, _ = connect(mode)
-    out = Path(out_dir or Path(__file__).resolve().parents[1] / "data" / "mt5")
+    from .paths import ROOT
+    out = Path(out_dir or ROOT / "data" / "mt5")
     out.mkdir(parents=True, exist_ok=True)
     done = []
     try:

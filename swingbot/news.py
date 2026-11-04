@@ -24,7 +24,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+from .paths import ROOT  # noqa: E402
 LOG = ROOT / "logs" / "news_decisions.jsonl"
 
 FEEDS = {

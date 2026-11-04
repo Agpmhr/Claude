@@ -1,0 +1,74 @@
+# Construit Swingbot.exe (application Windows) et compile l'Expert MT5 SwingbotV4.ex5.
+# Les fichiers sont téléchargeables dans l'onglet « Actions » de GitHub > dernière exécution > Artifacts.
+name: Construire Swingbot.exe et l'Expert MT5
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, swingbot]
+    paths: ["swingbot/**", "mt5/**", "app_main.py", "tests/**", ".github/workflows/build-windows.yml"]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy scipy lightgbm scikit-learn matplotlib pytest MetaTrader5 pyinstaller
+
+      - name: Tests
+        run: python -m pytest -q tests
+
+      - name: Test de la fenêtre (Tk)
+        run: python -c "from swingbot.app import make_app; a = make_app(); a.update(); a.destroy(); print('Fenêtre OK')"
+
+      - name: Construire Swingbot.exe
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name Swingbot
+          --hidden-import MetaTrader5 --collect-submodules swingbot
+          --exclude-module lightgbm --exclude-module sklearn --exclude-module matplotlib
+          app_main.py
+
+      - name: Installer MetaTrader 5 (pour compiler l'Expert)
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe" -OutFile mt5setup.exe
+          Start-Process -FilePath .\mt5setup.exe -ArgumentList "/auto" -Wait
+          Start-Sleep -Seconds 20
+          Get-Process terminal64 -ErrorAction SilentlyContinue | Stop-Process -Force
+
+      - name: Compiler SwingbotV4.mq5
+        id: compile
+        continue-on-error: true
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $me = Get-ChildItem -Path "C:\Program Files" -Recurse -Filter metaeditor64.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $me) { Write-Error "MetaEditor introuvable"; exit 1 }
+          $src = (Resolve-Path mt5\SwingbotV4.mq5).Path
+          $inc = Split-Path $me.FullName
+          & $me.FullName /compile:"$src" /inc:"$inc\MQL5" /log:"$PWD\mt5\compile.log" | Out-Null
+          Start-Sleep -Seconds 5
+          Get-Content mt5\compile.log -Encoding Unicode
+          if (-not (Test-Path mt5\SwingbotV4.ex5)) { Write-Error "Compilation échouée"; exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Swingbot-windows
+          path: |
+            dist/Swingbot.exe
+            mt5/SwingbotV4.ex5
+            mt5/SwingbotV4.mq5
+            mt5/compile.log
+            mt5/LISEZMOI_MT5.md
+          if-no-files-found: warn

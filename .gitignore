@@ -12,3 +12,9 @@ logs/
 *.bundle
 state/
 data/mt5/
+build/
+dist/
+*.spec
+swingbot_settings.json
+mt5/*.ex5
+mt5/compile.log
