@@ -49,20 +49,30 @@ jobs:
 
       - name: Compiler SwingbotV4.mq5
         id: compile
-        continue-on-error: true
-        timeout-minutes: 5
+        timeout-minutes: 8
         shell: pwsh
         run: |
           $me = Get-ChildItem -Path "C:\Program Files" -Recurse -Filter metaeditor64.exe -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $me) { Write-Error "MetaEditor introuvable"; exit 1 }
-          $src = (Resolve-Path mt5\SwingbotV4.mq5).Path
-          $inc = Split-Path $me.FullName
-          & $me.FullName /compile:"$src" /inc:"$inc\MQL5" /log:"$PWD\mt5\compile.log" | Out-Null
-          Start-Sleep -Seconds 5
-          Get-Content mt5\compile.log -Encoding Unicode
-          if (-not (Test-Path mt5\SwingbotV4.ex5)) { Write-Error "Compilation échouée"; exit 1 }
+          # dossier MQL5 contenant Include\Trade\Trade.mqh (installation ou dossier de données)
+          $tr = Get-ChildItem -Path "C:\Program Files", "$env:APPDATA\MetaQuotes" -Recurse -Filter Trade.mqh -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -match "Include\\Trade\\Trade.mqh$" } | Select-Object -First 1
+          if (-not $tr) { Write-Error "Bibliothèque standard MQL5 introuvable"; exit 1 }
+          $mql5 = $tr.Directory.Parent.Parent.FullName
+          Write-Host "MQL5 trouvé : $mql5"
+          # copie dans un dossier SANS espace (MetaEditor coupe les chemins à l'espace)
+          New-Item -ItemType Directory -Force -Path C:\sb\MQL5\Experts | Out-Null
+          Copy-Item -Recurse -Force "$mql5\Include" C:\sb\MQL5\Include
+          Copy-Item mt5\SwingbotV4.mq5 C:\sb\MQL5\Experts\SwingbotV4.mq5
+          Start-Process -FilePath $me.FullName -ArgumentList '/compile:C:\sb\MQL5\Experts\SwingbotV4.mq5','/inc:C:\sb\MQL5','/log:C:\sb\compile.log' -Wait
+          Get-Content C:\sb\compile.log -Encoding Unicode
+          Copy-Item C:\sb\compile.log mt5\compile.log
+          $log = Get-Content C:\sb\compile.log -Encoding Unicode -Raw
+          if ($log -notmatch "Result: 0 errors") { Write-Error "Compilation de l'Expert : erreurs (voir ci-dessus)"; exit 1 }
+          Copy-Item C:\sb\MQL5\Experts\SwingbotV4.ex5 mt5\SwingbotV4.ex5
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Swingbot-windows
           path: |

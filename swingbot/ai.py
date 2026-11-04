@@ -52,7 +52,7 @@ def instrument_features(data: dict, rates: pd.DataFrame | None, events: pd.DataF
         else:
             f["event_soon"] = 0.0
         f["kind_code"] = KIND_CODES[inst.kind]
-        f["dow"] = df.index.dayofweek
+        f["dow"] = df.index.day_of_week
         out[s] = f
         vr[s] = f["vol_rank"]
     mkt = pd.concat(vr, axis=1).mean(axis=1)

@@ -58,7 +58,7 @@ def clean(df: pd.DataFrame, sym: str, tf: str) -> tuple[pd.DataFrame, QCReport]:
         df["time"] = df["time"].dt.tz_convert(None)
     qc.duplicates = int(df.duplicated("time").sum())
     df = df.drop_duplicates("time", keep="last").sort_values("time")
-    wk = df["time"].dt.dayofweek >= 5
+    wk = df["time"].dt.day_of_week >= 5
     qc.weekend = int(wk.sum())
     df = df[~wk]
     # supprime la bougie du jour (incomplète)
@@ -124,7 +124,7 @@ def synthetic_universe(syms, tf="D1", start="2010-01-01", end="2026-10-30", seed
     freq = "B" if tf == "D1" else "h"
     idx = pd.date_range(start, end, freq=freq)
     if tf != "D1":
-        idx = idx[idx.dayofweek < 5]
+        idx = idx[idx.day_of_week < 5]
     n = len(idx)
     usd = rng.standard_normal(n)
     out = {}

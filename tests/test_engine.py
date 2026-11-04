@@ -94,6 +94,6 @@ def test_triple_swap_wednesday():
                      cost=CostModel(cost_mult=0.0), rates=rates)
     t = tr.iloc[0]
     # 5 nuits dont un mercredi -> 7 nuits facturées
-    nights = sum(3 if d == 2 else 1 for d in df.index[t.entry_i:t.entry_i + 5].dayofweek)
+    nights = sum(3 if d == 2 else 1 for d in df.index[t.entry_i:t.entry_i + 5].day_of_week)
     expected = 0.36 / 360 * nights * 1.0 / t.stop_dist   # cost_mult=0 annule aussi la marge du broker
     assert abs(t.c_swap - expected) / expected < 1e-6
