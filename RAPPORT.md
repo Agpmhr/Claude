@@ -3,7 +3,7 @@
 ## 🆕🆕 Vagues 4 et 5 : le système v4 (tendance lente sur futures sans swap, MT5)
 
 ### Verdict en une phrase
-**Le meilleur candidat de la nuit est la v4 : une tendance lente sur les futures CFD sans swap d'IC Markets (pétrole WTI et Brent, dollar, or), disponibles uniquement sur MT5.** Sur 2010-2026, elle fait un profit factor de 1,64, un Sharpe de 0,42 et +2,7 %/an à 0,25 % de risque par signal, avec une pire baisse de -18 %. Elle reste positive sur l'or, jamais testé avec cette idée (PF 2,4), et sur la période neuve 2024-2026 (PF 1,16 pour pétrole + dollar). Elle **n'atteint toujours pas un Sharpe de 0,8**. **Démo MT5 recommandée, pas d'argent réel.**
+**Le meilleur candidat de la nuit est la v4 (mais les preuves restent mitigées, voir le test agricole plus bas) : une tendance lente sur les futures CFD sans swap d'IC Markets (pétrole WTI et Brent, dollar, or), disponibles uniquement sur MT5.** Sur 2010-2026, elle fait un profit factor de 1,64, un Sharpe de 0,42 et +2,7 %/an à 0,25 % de risque par signal, avec une pire baisse de -18 %. Elle reste positive sur l'or, jamais testé avec cette idée (PF 2,4), et sur la période neuve 2024-2026 (PF 1,16 pour pétrole + dollar). Elle **n'atteint toujours pas un Sharpe de 0,8**. **Démo MT5 recommandée, pas d'argent réel.**
 
 ![v4](results/v4_equity.png)
 
@@ -44,6 +44,15 @@ Système : ensemble des 3 durées 55, 100 et 150 jours, stop à 3 ATR, 0,4 % de 
 
   À 0,25 %, sur 2024-2026 : +5,9 %/an, PF 2,1. **C'est ce réglage (0,25 %) que le bot utilise.**
 - **Limites** : 4 instruments seulement, des données de substitution, un Sharpe d'environ 0,4, et le dollar qui perd sur la période neuve. **124 essais** au total depuis le début de la nuit.
+
+### Dernier test hors échantillon : la v4 **inchangée** sur 4 matières agricoles jamais vues (❌)
+IC Markets propose aussi 8 futures agricoles sans swap. Les données ne sont propres que pour le maïs, le blé, le soja et le sucre (ETF Teucrium). Test figé avant exécution : `scripts/agri_verdict.py`.
+| | Trades | PF | Sharpe | Années + | R moyen par instrument |
+|---|---|---|---|---|---|
+| 4 agricoles (jamais vues) | 453 | **0,91** | -0,05 | 5/16 | soja +0,21, sucre +0,27, **blé -0,37, maïs -0,13** |
+| 8 futures ensemble (diagnostic) | 911 | 1,30 | 0,33 | 7/16 | or +0,85, Brent +0,43, dollar +0,40, WTI +0,39 |
+
+➡️ **La tendance lente ne se généralise pas** : elle marche sur l'or et le pétrole, pas sur les céréales. Le bot reste limité à WTI, Brent, DXY et or, mais ce test **affaiblit** la confiance dans la v4. Une partie de son résultat peut venir des instruments eux-mêmes, et pas d'un avantage général. Total : **128 essais**.
 
 ### Le bot MT5 fait tourner la v4 par défaut
 - `SWINGBOT_SYSTEM=v4`. Les signaux sont calculés sur les séries continues ; l'ordre part sur le future du broker, avec un stop en **% du prix**.
