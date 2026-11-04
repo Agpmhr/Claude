@@ -175,5 +175,11 @@ def our_symbol(name: str) -> str:
 
 
 def make_broker(equity_hint: float = 1000.0):
+    """SWINGBOT_BROKER = ctrader (défaut) ou mt5. En mode papier, aucun broker n'est contacté."""
     mode = trading_mode()
-    return PaperBroker(equity_hint) if mode == "paper" else CTraderBroker(mode)
+    if mode == "paper":
+        return PaperBroker(equity_hint)
+    if os.environ.get("SWINGBOT_BROKER", "ctrader").lower() == "mt5":
+        from .mt5_broker import MT5Broker
+        return MT5Broker(mode)
+    return CTraderBroker(mode)

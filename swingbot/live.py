@@ -50,9 +50,13 @@ def save_state(st: dict):
 
 
 def refresh_data():
-    """Recharge les D1 récentes (Yahoo). À remplacer par les bougies cTrader pour coller au broker."""
+    """Recharge les D1 récentes : depuis MT5 si SWINGBOT_BROKER=mt5 (bougies du broker), sinon Yahoo.
+    VIX : toujours Yahoo (pas forcément disponible chez le broker)."""
     import subprocess
     import sys
+    if os.environ.get("SWINGBOT_BROKER", "").lower() == "mt5" and trading_mode() != "paper":
+        from .mt5_broker import export_history
+        export_history(RESEARCH + HOLDOUT, bars=400, mode=trading_mode())
     subprocess.run([sys.executable, str(ROOT / "scripts" / "fetch_yahoo.py"), "--force"], check=False)
 
 

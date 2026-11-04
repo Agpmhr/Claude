@@ -11,3 +11,4 @@ results/cache/
 logs/
 *.bundle
 state/
+data/mt5/
