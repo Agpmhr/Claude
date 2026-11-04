@@ -169,4 +169,5 @@ def eur_conversion(data: dict[str, pd.DataFrame], index: pd.DatetimeIndex) -> pd
     conv["CAD"] = 1 / (eurusd * c("USDCAD"))
     conv["AUD"] = c("AUDUSD") / eurusd
     conv["NZD"] = c("NZDUSD") / eurusd
+    conv["HKD"] = conv["USD"] / 7.8          # dollar de Hong Kong arrimé au dollar US
     return conv

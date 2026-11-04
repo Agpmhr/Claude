@@ -87,6 +87,34 @@ HOLDOUT_LIST = [
 ]
 HOLDOUT = [i.sym for i in HOLDOUT_LIST]
 UNIVERSE.update({i.sym: i for i in HOLDOUT_LIST})
+
+# Univers RÉSERVÉ n°2 : jamais regardé avant la vague 4 (le n°1 a été consommé par le verdict v2).
+HOLDOUT2_LIST = [
+    Instrument("EURNZD", "EURNZD=X", "fx", "EUR", "NZD", 1e-4, 1e5, 1.11, 20),
+    Instrument("GBPCAD", "GBPCAD=X", "fx", "GBP", "CAD", 1e-4, 1e5, 0.69, 30),
+    Instrument("GBPNZD", "GBPNZD=X", "fx", "GBP", "NZD", 1e-4, 1e5, 1.60, 20),
+    Instrument("NZDCAD", "NZDCAD=X", "fx", "NZD", "CAD", 1e-4, 1e5, 0.71, 20),
+    Instrument("NZDCHF", "NZDCHF=X", "fx", "NZD", "CHF", 1e-4, 1e5, 0.38, 20),
+    Instrument("CADCHF", "CADCHF=X", "fx", "CAD", "CHF", 1e-4, 1e5, 0.34, 30),
+    Instrument("AUDCHF", "AUDCHF=X", "fx", "AUD", "CHF", 1e-4, 1e5, 0.35, 20),
+    Instrument("HK50", "^HSI", "index", "IDX", "HKD", 1.0, 1, 7.94, 10, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="USD"),
+    Instrument("ES35", "^IBEX", "index", "IDX", "EUR", 1.0, 1, 4.20, 10, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="EUR"),
+    Instrument("NETH25", "^AEX", "index", "IDX", "EUR", 0.01, 1, 20, 20, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="EUR"),
+    Instrument("SWI20", "^SSMI", "index", "IDX", "CHF", 1.0, 1, 3.40, 20, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="CHF"),
+    Instrument("CA60", "^GSPTSE", "index", "IDX", "CAD", 1.0, 1, 0.60, 10, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="CAD"),
+    Instrument("US2000", "^RUT", "index", "IDX", "USD", 1.0, 1, 0.40, 10, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="USD"),
+    Instrument("IT40", "FTSEMIB.MI", "index", "IDX", "EUR", 1.0, 1, 9.00, 20, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="EUR"),
+]
+HOLDOUT2 = [i.sym for i in HOLDOUT2_LIST]
+UNIVERSE.update({i.sym: i for i in HOLDOUT2_LIST})
+POOL = RESEARCH + HOLDOUT   # pool de recherche à partir de la vague 4 (32 instruments)
 INDICES = [s for s, i in UNIVERSE.items() if i.kind == "index"]
 
 COMMISSION_PER_SIDE = 3e-5   # 3 USD par 100k USD de notionnel, par côté (cTrader Raw)

@@ -33,7 +33,7 @@ OUT = ROOT / "results"
 SYSTEM = {"idx_dip": dict(lo=5, trend=False), "carry_safe": dict(thr=0.02, vix_max=22.0)}
 
 
-def build(data, ctx, cost=CostModel(), system=SYSTEM):
+def build(data, ctx, cost=CostModel(), system=SYSTEM):  # noqa: B008
     from swingbot.backtest import simulate
     from swingbot.research import block_of, event_series
     evs = event_series(data, ctx["events"])
