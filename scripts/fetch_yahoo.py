@@ -47,12 +47,18 @@ def fetch(ticker: str, interval: str, start: int, end: int) -> pd.DataFrame:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", default="2010-01-01")
+    ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
     out = ROOT / "data" / "yahoo"
     out.mkdir(parents=True, exist_ok=True)
     now = int(time.time())
     s0 = int(datetime.fromisoformat(args.start).replace(tzinfo=timezone.utc).timestamp())
+    extra = {"VIX": "^VIX"}
+    for sym, tk in extra.items():
+        fetch(tk, "1d", s0, now).to_csv(out / f"{sym}_D1.csv", index=False)
     for sym, spec in UNIVERSE.items():
+        if (out / f"{sym}_D1.csv").exists() and "--force" not in sys.argv:
+            continue
         d1 = fetch(spec.yahoo, "1d", s0, now)
         d1.to_csv(out / f"{sym}_D1.csv", index=False)
         # H1 : Yahoo limite à 730 jours glissants

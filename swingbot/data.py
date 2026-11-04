@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .instruments import UNIVERSE
+from .instruments import RESEARCH, UNIVERSE
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
@@ -96,7 +96,7 @@ def clean(df: pd.DataFrame, sym: str, tf: str) -> tuple[pd.DataFrame, QCReport]:
 
 def load_universe(tf: str = "D1", syms: list[str] | None = None, start: str = "2010-01-01"):
     """Retourne (dict sym -> DataFrame OHLC, liste de QCReport). Utilise le synthétique si rien n'est trouvé."""
-    syms = syms or list(UNIVERSE)
+    syms = syms or list(RESEARCH)
     out, reps = {}, []
     for s in syms:
         raw = _read(s, tf)
@@ -167,4 +167,6 @@ def eur_conversion(data: dict[str, pd.DataFrame], index: pd.DatetimeIndex) -> pd
     conv["GBP"] = 1 / c("EURGBP") if "EURGBP" in data else c("GBPUSD") / eurusd
     conv["CHF"] = 1 / (eurusd * c("USDCHF"))
     conv["CAD"] = 1 / (eurusd * c("USDCAD"))
+    conv["AUD"] = c("AUDUSD") / eurusd
+    conv["NZD"] = c("NZDUSD") / eurusd
     return conv
