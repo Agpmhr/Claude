@@ -1,0 +1,32 @@
+{
+  "configs_retenues_pour_le_test": [
+    "carry|thr=0.005,trend_n=200",
+    "rsi2|hi=95,lo=5,trend_n=200",
+    "trend_long|n=100,stop=4.0",
+    "tsmom|hold=10,lookback=252"
+  ],
+  "aleatoire_test_rendement_median": -0.04758154612563459,
+  "aleatoire_test_rendement_p10_p90": [
+    -0.11916166513488177,
+    0.08937395319582504
+  ],
+  "achat_conservation_test_prix_sans_frais": {
+    "US500": 0.32120517035380614,
+    "XAUUSD": 0.43328967420653175,
+    "EURUSD": 0.028103313772702476,
+    "GER40": 0.34326972185043525
+  },
+  "monte_carlo_drawdown_p50_p95_p99": [
+    -0.21491295830788942,
+    -0.2956244487992355,
+    -0.3296465857746153
+  ],
+  "nb_essais": 52,
+  "deflated_sharpe_proba": 0.025092190470027288,
+  "sharpe_max_attendu_par_hasard": 1.398233532989005,
+  "rendement_mensuel_p10_p50_p90": [
+    -0.01887107512222136,
+    0.0007506474262805041,
+    0.015438511625706641
+  ]
+}
