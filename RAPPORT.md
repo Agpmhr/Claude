@@ -1,5 +1,71 @@
 # Swingbot : rapport final (nuit du 4 au 5 novembre 2026)
 
+## 🆕 Vague 2 : système v2 et bot de démo
+
+### Verdict en une phrase
+**Le système v2 a un avantage réel mais mince.** Il reste positif sur 16 instruments jamais vus (profit factor 1,07) et sur une période jamais vue (profit factor 1,59, Sharpe 0,79), mais il **n'atteint pas les critères** (PF > 1,3 et Sharpe > 0,8) sur l'univers réservé. Le faire tourner **en démo pendant 2 à 3 mois** est raisonnable, sans risquer d'argent. Passer en argent réel, non, pas sur ces chiffres.
+
+![v2](results/v2_equity.png)
+
+### Ce qui a changé de méthode
+- La période test 2024-2026 était « grillée » par la vague 1. J'ai donc **mis de côté 16 instruments jamais regardés** : EURCHF, EURAUD, GBPCHF, CADJPY, NZDJPY, AUDNZD, EURCAD, GBPAUD, CHFJPY, AUDCAD, UK100, JP225, F40, STOXX50, US30 et AUS200, avec leurs frais officiels IC Markets. Les idées ont été choisies sur l'univers de recherche, puis jugées **une seule fois** sur ces instruments réservés.
+- La règle de sélection a été figée avant le verdict (et commitée avant exécution) : une idée est gardée si au moins 3 réglages sur 4 sont positifs après coûts, à la fois en entraînement et en validation.
+
+### Les 6 idées testées : des horizons courts, pour échapper au coût des swaps
+| Idée | Inspiration | Entraînement → validation (R moyen net) | Retenue ? |
+|---|---|---|---|
+| **idx_dip** : acheter un indice après une forte baisse sur 2 jours (RSI(2) < 5), revendre au rebond | retour à la moyenne court terme des indices | +0,02 à +0,04 → +0,07 à +0,10 (4 réglages sur 4 positifs) | ✅ |
+| **carry_safe** : encaisser le swap positif en forex **seulement** quand le VIX est bas et en baisse, sortir dès que la peur monte | idée maison (le carry rapporte peu à peu puis perd tout lors des paniques) | 3 réglages sur 4 positifs sur les deux blocs | ✅ |
+| tom : tournant du mois sur indices | Ariel 1987, McConnell & Xu 2008 | mitigé | ✘ |
+| pre_fomc : achat des indices avant la Fed | Lucca & Moench 2015 | 1 réglage sur 2 | ✘ |
+| me_usd : flux de couverture de fin de mois sur le dollar | Melvin & Prins 2015 | **négatif** | ✘ |
+| vix_crush : rachat après une panique du VIX | idée maison | mitigé | ✘ |
+
+### Résultats du système v2 (idx_dip + carry_safe, risque 0,75 %/trade, frais réels IC Markets)
+| Bloc | Sharpe | PF | Rendement/an | Pire baisse | Trades |
+|---|---|---|---|---|---|
+| Recherche, entraînement 2010-2018 | 0,19 | 1,12 | +0,7 % | -9 % | 280 |
+| Recherche, validation 2019-2024 | 0,70 | 1,59 | +2,3 % | -5 % | 174 |
+| **Instruments RÉSERVÉS 2010-2026 (jamais vus)** | **0,16** | **1,07** | **+0,5 %** | **-13 %** | 735 |
+| **Période NEUVE 2024-11 → 2026-11** | **0,79** | **1,59** | **+3,3 %** | **-5 %** | 95 |
+| Les 32 instruments ensemble 2010-2026 | 0,40 | 1,22 | +1,9 % | -13 % | 899 |
+
+- **Robustesse**, sur l'univers de recherche 2010-2024 : avec des coûts ×1,5, Sharpe 0,29 et PF 1,22 ; avec des réglages à -20 %, PF 1,12 ; à +20 %, PF 1,16. Le système reste positif partout. C'est la grosse différence avec la vague 1.
+- Sur les instruments réservés, chacune des deux idées reste positive : environ +0,02 R par trade. 9 instruments sur 16 et 9 années sur 17 sont gagnants. Les gros gains viennent de JP225, NZDJPY et CADJPY ; les pertes, d'AUS200 et GBPAUD.
+- **Nombre total d'essais** depuis le début : **72**. Avec autant d'essais, un Sharpe de 0,4 sur 16 ans reste fragile. C'est pour ça que la démo est indispensable.
+- **Monte Carlo** (32 instruments) : drawdown médian -9 %, -14 % dans 5 % des cas, -17 % dans 1 % des cas. 58 % des mois sont positifs. Rendement mensuel : -1,3 % (mauvais mois), +0,3 % (médian), +1,8 % (bon mois).
+
+### En euros, pour les 32 instruments sur 2010-2026
+| Capital | Rendement/an | Gain total en 16 ans | Pire baisse | Signaux refusés (lot minimum) |
+|---|---|---|---|---|
+| 200 € | +0,8 % | +28 € | -6 % | 1 083 |
+| 500 € | +1,0 % | +86 € | -9 % | 781 |
+| 1 000 € | +1,1 % | +189 € | -9 % | 658 |
+| 3 000 € | +2,1 % | +1 215 € | -13 % | 51 |
+| 10 000 € | +1,9 % | +3 617 € | -13 % | 0 |
+
+➡️ Le bot ne devient « complet » qu'**à partir d'environ 3 000 €**. En dessous, le lot minimum de 0,01 l'oblige à refuser la majorité des signaux. Même à 10 000 €, ça fait environ **+190 €/an en moyenne**, pas un revenu.
+
+### Le bot (démo uniquement)
+- `swingbot/live.py` : à lancer une fois par jour après la clôture, vers 22h15 UTC. Il :
+  - recharge les données ;
+  - applique le coupe-circuit (-3 % sur la journée, -6 % sur la semaine, arrêt définitif à -20 %) ;
+  - consulte le filtre news (défense uniquement) ;
+  - décide des sorties (signal, durée maximale, choc de news), puis des entrées, avec les limites par devise, le risque total et l'arrondi au lot ;
+  - **journalise chaque décision** dans `logs/live_decisions.jsonl` (idée, raison, taille, risque en €, refus et pourquoi).
+- `swingbot/ctrader.py` : connecteur cTrader Open API.
+  - **Mode papier par défaut.** Le mode `demo` **vérifie que le compte est bien un compte démo** avant tout ordre.
+  - Le mode `live` est **refusé** sans `SWINGBOT_LIVE_CONFIRM=JE_COMPRENDS_LES_RISQUES`, et c'est testé automatiquement.
+  - Les identifiants sont uniquement dans des variables d'environnement.
+- `scripts/compare_live.py` : compare le journal de démo au backtest sur la même période (trades communs, manqués, écart de R moyen).
+  - ⚠️ Effet de démarrage connu : au premier jour, le bot entre dans toutes les positions de carry déjà « actives ». Pour comparer, ignorez la première semaine.
+- ⚠️ **Pas encore testé contre les serveurs cTrader** : il faut vos identifiants d'application. Le premier lancement en démo doit se faire avec vous derrière l'écran.
+- Les stops sont gérés par le broker (stop envoyé avec l'ordre). En mode papier, les stops ne sont pas simulés : on clôture au cours de clôture.
+
+---
+
+# Vague 1 (archive)
+
 ## Verdict en une phrase
 
 **Non : aucune configuration n'atteint les critères sur le bloc de test.** Le résultat est un Sharpe de 0,03 et un profit factor de 1,01 sur 2024-2026, après coûts. Ça ne vaut pas le coup de passer en démo **en espérant un revenu**. Une démo n'aurait d'intérêt que pour apprendre.
@@ -141,7 +207,19 @@ python -m pytest -q tests            # 6 tests du moteur
 python scripts/run_research.py       # recherche (entraînement + validation)
 python scripts/final_test.py         # ⚠️ le test final : il a DÉJÀ été consommé, le relancer ne sert qu'à reproduire
 set NEWS_LLM=none & python -m swingbot.news   # lecteur de news (ollama / anthropic possibles)
+
+# --- Vague 2 / bot
+python scripts/ideas_final.py        # ⚠️ verdict v2 : DÉJÀ consommé (univers réservé), le relancer ne sert qu'à reproduire
+pip install ctrader-open-api
+python -m swingbot.live              # mode papier (rien n'est envoyé)
+# démo cTrader (PowerShell) :
+$env:CTRADER_CLIENT_ID="..."; $env:CTRADER_CLIENT_SECRET="..."; $env:CTRADER_ACCESS_TOKEN="..."; $env:CTRADER_ACCOUNT_ID="..."
+$env:SWINGBOT_MODE="demo"; $env:SWINGBOT_CAPITAL="10000"; python -m swingbot.live
+python scripts/compare_live.py       # démo vs backtest
 ```
+Planifiez `python -m swingbot.live` chaque jour de semaine à 23h15 (heure de Paris), avec le Planificateur de tâches Windows.
+
+**Obtenir les identifiants cTrader** : créez une application sur https://openapi.ctrader.com (il faut un cTrader ID), puis autorisez-la sur votre compte **démo** IC Markets pour obtenir le jeton d'accès et l'identifiant du compte (`ctidTraderAccountId`).
 
 **Si vous voulez continuer** (mes recommandations, sans enjoliver) :
 1. **Avec Dukascopy complet** (H1 sur 10 ans), on pourrait tester du swing H4. Mais il faut un **nouveau bloc test** : celui de 2024-2026 est grillé. Concrètement, attendre 12 mois de données nouvelles, ou tester sur des instruments jamais regardés.

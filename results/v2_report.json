@@ -1,0 +1,133 @@
+{
+  "systeme": {
+    "idx_dip": {
+      "lo": 5,
+      "trend": false
+    },
+    "carry_safe": {
+      "thr": 0.02,
+      "vix_max": 22.0
+    }
+  },
+  "essais_total": 72,
+  "robustesse_recherche_2010_2024": {
+    "coûts x1,5": {
+      "sharpe": 0.29,
+      "pf": 1.217,
+      "max_dd": -0.101,
+      "cagr": 0.01,
+      "n_trades": 454.0
+    },
+    "paramètres -20 %": {
+      "sharpe": 0.151,
+      "pf": 1.116,
+      "max_dd": -0.131,
+      "cagr": 0.005,
+      "n_trades": 401.0
+    },
+    "paramètres +20 %": {
+      "sharpe": 0.233,
+      "pf": 1.156,
+      "max_dd": -0.089,
+      "cagr": 0.008,
+      "n_trades": 467.0
+    }
+  },
+  "verdict_reserve": {
+    "pf_ok": false,
+    "sharpe_ok": false,
+    "dd_ok": true,
+    "annees_positives": "9/17",
+    "instruments_positifs": "9/16",
+    "n_trades": 735
+  },
+  "verdict_periode_neuve": {
+    "pf_ok": true,
+    "sharpe_ok": false,
+    "dd_ok": true,
+    "annees_positives": "2/3",
+    "instruments_positifs": "7/10",
+    "n_trades": 95
+  },
+  "tout_univers_2010_2026": {
+    "rendement_total": 0.362,
+    "cagr": 0.019,
+    "sharpe": 0.405,
+    "max_dd": -0.133,
+    "n_trades": 899,
+    "win": 0.59,
+    "pf": 1.219,
+    "avg_r": 0.053
+  },
+  "capitaux_tout_univers": [
+    {
+      "capital": 200,
+      "cagr": 0.0079,
+      "max_dd": -0.063,
+      "n_trades": 457,
+      "gain_eur": 27.6,
+      "refus_lot_min": 1083
+    },
+    {
+      "capital": 500,
+      "cagr": 0.0097,
+      "max_dd": -0.086,
+      "n_trades": 513,
+      "gain_eur": 85.7,
+      "refus_lot_min": 781
+    },
+    {
+      "capital": 1000,
+      "cagr": 0.0106,
+      "max_dd": -0.091,
+      "n_trades": 535,
+      "gain_eur": 189.0,
+      "refus_lot_min": 658
+    },
+    {
+      "capital": 3000,
+      "cagr": 0.0209,
+      "max_dd": -0.133,
+      "n_trades": 879,
+      "gain_eur": 1215.3,
+      "refus_lot_min": 51
+    },
+    {
+      "capital": 10000,
+      "cagr": 0.019,
+      "max_dd": -0.133,
+      "n_trades": 899,
+      "gain_eur": 3616.5,
+      "refus_lot_min": 0
+    }
+  ],
+  "monte_carlo_dd_p50_p95_p99": [
+    -0.093,
+    -0.14,
+    -0.167
+  ],
+  "rendement_mensuel_p10_p50_p90": [
+    -0.0129,
+    0.0028,
+    0.0176
+  ],
+  "mois_positifs": 0.579,
+  "rendement_par_annee_tout_univers": {
+    "2011": 0.006,
+    "2012": 0.067,
+    "2013": 0.004,
+    "2014": -0.028,
+    "2015": -0.027,
+    "2016": 0.014,
+    "2017": 0.051,
+    "2018": 0.004,
+    "2019": 0.024,
+    "2020": -0.006,
+    "2021": 0.05,
+    "2022": 0.011,
+    "2023": 0.024,
+    "2024": 0.073,
+    "2025": -0.042,
+    "2026": 0.051
+  }
+}

@@ -58,6 +58,37 @@ UNIVERSE: dict[str, Instrument] = {i.sym: i for i in [
                swap_markup=0.055, triple_swap_day=4, rate_ccy="EUR"),
 ]}
 
+# Univers RÉSERVÉ (« holdout ») : instruments jamais regardés pendant la recherche.
+# Ils ne servent qu'au verdict final des nouvelles idées (coûts officiels IC Markets du 4 nov. 2026).
+RESEARCH = list(UNIVERSE)
+HOLDOUT_LIST = [
+    Instrument("EURCHF", "EURCHF=X", "fx", "EUR", "CHF", 1e-4, 1e5, 0.42, 30),
+    Instrument("EURAUD", "EURAUD=X", "fx", "EUR", "AUD", 1e-4, 1e5, 0.68, 20),
+    Instrument("GBPCHF", "GBPCHF=X", "fx", "GBP", "CHF", 1e-4, 1e5, 0.73, 30),
+    Instrument("CADJPY", "CADJPY=X", "fx", "CAD", "JPY", 1e-2, 1e5, 0.35, 30),
+    Instrument("NZDJPY", "NZDJPY=X", "fx", "NZD", "JPY", 1e-2, 1e5, 0.58, 20),
+    Instrument("AUDNZD", "AUDNZD=X", "fx", "AUD", "NZD", 1e-4, 1e5, 0.57, 20),
+    Instrument("EURCAD", "EURCAD=X", "fx", "EUR", "CAD", 1e-4, 1e5, 0.49, 30),
+    Instrument("GBPAUD", "GBPAUD=X", "fx", "GBP", "AUD", 1e-4, 1e5, 0.80, 20),
+    Instrument("CHFJPY", "CHFJPY=X", "fx", "CHF", "JPY", 1e-2, 1e5, 0.56, 30),
+    Instrument("AUDCAD", "AUDCAD=X", "fx", "AUD", "CAD", 1e-4, 1e5, 0.45, 20),
+    Instrument("UK100", "^FTSE", "index", "IDX", "GBP", 1.0, 1, 1.50, 20, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="GBP"),
+    Instrument("JP225", "^N225", "index", "IDX", "JPY", 1.0, 1, 7.63, 20, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="JPY"),
+    Instrument("F40", "^FCHI", "index", "IDX", "EUR", 1.0, 1, 0.82, 20, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="EUR"),
+    Instrument("STOXX50", "^STOXX50E", "index", "IDX", "EUR", 1.0, 1, 1.60, 20, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="EUR"),
+    Instrument("US30", "^DJI", "index", "IDX", "USD", 1.0, 1, 1.09, 20, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="USD"),
+    Instrument("AUS200", "^AXJO", "index", "IDX", "AUD", 1.0, 1, 1.20, 20, commission=False,
+               swap_markup=0.055, triple_swap_day=4, rate_ccy="AUD"),
+]
+HOLDOUT = [i.sym for i in HOLDOUT_LIST]
+UNIVERSE.update({i.sym: i for i in HOLDOUT_LIST})
+INDICES = [s for s, i in UNIVERSE.items() if i.kind == "index"]
+
 COMMISSION_PER_SIDE = 3e-5   # 3 USD par 100k USD de notionnel, par côté (cTrader Raw)
 MIN_LOT = 0.01
 LOT_STEP = 0.01
