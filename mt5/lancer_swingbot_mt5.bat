@@ -6,6 +6,7 @@ cd /d "%~dp0\.."
 call venv\Scripts\activate.bat
 set SWINGBOT_BROKER=mt5
 set SWINGBOT_MODE=demo
+set SWINGBOT_SYSTEM=v4
 set SWINGBOT_CAPITAL=10000
 set NEWS_LLM=none
 python -m swingbot.live >> logs\lancement.log 2>&1

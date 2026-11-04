@@ -25,9 +25,9 @@ class CostModel:
     swap_markup_mult: float = 1.0   # multiplie la marge de swap du broker (sensibilité)
 
     def spread(self, inst: Instrument, ts: pd.Timestamp | None = None, tf: str = "D1",
-               event: bool = False) -> float:
+               event: bool = False, price: float | None = None) -> float:
         """Spread en unités de prix au moment d'une exécution."""
-        s = inst.spread_pips * inst.pip
+        s = inst.spread_pct * price if (inst.spread_pct and price) else inst.spread_pips * inst.pip
         if tf == "D1":
             m = self.exec_spread_mult
         else:
@@ -54,6 +54,10 @@ def swap_rates(inst: Instrument, rates: pd.DataFrame | None, dates: pd.DatetimeI
     """
     mk = inst.swap_markup if markup is None else markup
     n = len(dates)
+    if inst.kind == "future":
+        lo, sh = inst.fixed_swap or (0.0, 0.0)
+        r_usd = rates.reindex(dates, method="ffill")["USD"].fillna(0.0).to_numpy() if rates is not None else 0.0
+        return lo - r_usd + 0 * np.ones(n), sh + r_usd + 0 * np.ones(n)
     if rates is None:
         return np.full(n, -mk), np.full(n, -mk)
     r = rates.reindex(dates, method="ffill").fillna(0.0)

@@ -279,3 +279,178 @@ IDEAS3 = {
 }
 IDEAS.update(IDEAS3)
 N_IDEA3_CONFIGS = sum(len(g) for _, g in IDEAS3.values())
+
+
+# ============================================================================ VAGUE 4
+"""
+  ibs        « Internal Bar Strength » sur indices : clôture tout en bas de la séance -> rebond le lendemain
+             (Pagonidis 2013, effet IBS très documenté sur les indices actions).
+  streak     N clôtures baissières d'affilée sur un indice -> achat, sortie au premier rebond.
+  dip_vote   Ensemble de signaux de repli (RSI(2), IBS, série baissière) : on achète quand plusieurs
+             signaux indépendants sont d'accord. Idée maison (vote = moins de faux signaux).
+  ml_pool    IA « directe » : un modèle LightGBM unique (tous instruments mélangés) prédit le mouvement des
+             5 prochaines séances en multiples d'ATR, réentraîné chaque année sur le passé seulement.
+             On ne trade que les prédictions fortes. Sur indices : achat seulement.
+"""
+
+
+def _ibs(df):
+    rng = (df.high - df.low).replace(0, np.nan)
+    return (df.close - df.low) / rng
+
+
+def ibs(data, ctx, thr=0.15, hold=2, stop=3.0):
+    out = {}
+    for s, df in data.items():
+        if not _idx(s):
+            continue
+        x = _ibs(df)
+        ent = pd.Series(np.where(x < thr, 1, 0), index=df.index)
+        out[s] = (ent, x > 0.7, None, ExitRules(stop_atr=stop, max_bars=hold))
+    return out
+
+
+def streak(data, ctx, n=3, trend=False, stop=3.0):
+    out = {}
+    for s, df in data.items():
+        if not _idx(s):
+            continue
+        down = (df.close < df.close.shift(1)).astype(int)
+        run = down.groupby((down == 0).cumsum()).cumsum()
+        ok = df.close > df.close.rolling(200).mean() if trend else True
+        ent = pd.Series(np.where((run >= n) & ok, 1, 0), index=df.index)
+        out[s] = (ent, df.close > df.high.shift(1), None, ExitRules(stop_atr=stop, max_bars=5))
+    return out
+
+
+def dip_vote(data, ctx, votes=2, trend=False, stop=3.0):
+    out = {}
+    for s, df in data.items():
+        if not _idx(s):
+            continue
+        r2 = rsi(df.close, 2)
+        down = (df.close < df.close.shift(1)).astype(int)
+        run = down.groupby((down == 0).cumsum()).cumsum()
+        v = (r2 < 10).astype(int) + (_ibs(df) < 0.2).astype(int) + (run >= 3).astype(int)
+        ok = df.close > df.close.rolling(200).mean() if trend else True
+        ent = pd.Series(np.where((v >= votes) & ok, 1, 0), index=df.index)
+        out[s] = (ent, r2 > 60, None, ExitRules(stop_atr=stop, max_bars=5))
+    return out
+
+
+def _ml_features(df, ctx, s):
+    from .indicators import atr as _atr, efficiency_ratio, pct_rank, realized_vol
+    c = df.close
+    a = _atr(df, 20)
+    f = pd.DataFrame(index=df.index)
+    dv = np.log(c).diff().rolling(60).std()
+    for h in (1, 2, 5, 10, 20, 60):
+        f[f"r{h}"] = np.log(c / c.shift(h)) / (dv * np.sqrt(h))
+    f["rsi2"] = rsi(c, 2)
+    f["rsi14"] = rsi(c, 14)
+    f["ibs"] = _ibs(df)
+    for n in (20, 50, 200):
+        f[f"d{n}"] = (c - c.rolling(n).mean()) / a
+    f["volr"] = pct_rank(realized_vol(c, 20), 252)
+    f["er"] = efficiency_ratio(c, 20)
+    v = _vix(ctx, df.index)
+    f["vix"] = v
+    f["vix_ch"] = np.log(v / v.shift(5))
+    f["dow"] = df.index.dayofweek
+    f["dme"] = days_to_month_end(df.index)
+    inst = UNIVERSE[s]
+    if inst.kind == "fx":
+        f["carry"] = _carry_dir(ctx, inst, df.index)
+    else:
+        f["carry"] = 0.0
+    f["kind"] = {"fx": 0, "metal": 1, "index": 2, "future": 3}[inst.kind]
+    # cible : mouvement de l'ouverture t+1 à l'ouverture t+6, en ATR (utilisée SEULEMENT pour l'entraînement)
+    y = (df.open.shift(-6) - df.open.shift(-1)) / a
+    return f, y
+
+
+def ml_pool(data, ctx, k=0.3, scope="indices", stop=2.5):
+    import lightgbm as lgb
+    syms = [s for s in data if (UNIVERSE[s].kind == "index" if scope == "indices" else True)]
+    F, Y, S = [], [], []
+    for s in syms:
+        f, y = _ml_features(data[s], ctx, s)
+        F.append(f); Y.append(y.clip(-4, 4)); S.append(pd.Series(s, index=f.index))
+    X = pd.concat(F); y = pd.concat(Y); sy = pd.concat(S)
+    dates = X.index
+    pred = pd.Series(np.nan, index=range(len(X)))
+    Xv = X.reset_index(drop=True); yv = y.reset_index(drop=True)
+    for Y_ in range(2013, 2027):
+        cut = pd.Timestamp(f"{Y_}-01-01")
+        tr = (dates < cut - pd.Timedelta(days=10)) & yv.notna().to_numpy()   # purge : la cible voit 6 séances
+        te = (dates >= cut) & (dates < pd.Timestamp(f"{Y_ + 1}-01-01"))
+        if tr.sum() < 2000 or te.sum() == 0:
+            continue
+        m = lgb.LGBMRegressor(n_estimators=150, learning_rate=0.03, num_leaves=8, min_child_samples=200,
+                              subsample=0.8, subsample_freq=1, colsample_bytree=0.8, reg_lambda=10, verbose=-1,
+                              random_state=0)
+        m.fit(Xv[tr], yv[tr])
+        pred[np.where(te)[0]] = m.predict(Xv[te])
+    pred.index = pd.MultiIndex.from_arrays([sy.to_numpy(), dates])
+    out = {}
+    for s in syms:
+        p = pred.xs(s).reindex(data[s].index)
+        sig = np.where(p > k, 1, np.where(p < -k, -1, 0))
+        if UNIVERSE[s].kind == "index":
+            sig = np.clip(sig, 0, 1)
+        out[s] = (pd.Series(sig, index=data[s].index), None, None, ExitRules(stop_atr=stop, max_bars=5))
+    return out
+
+
+IDEAS4 = {
+    "ibs": (ibs, [dict(thr=t, hold=h) for t in (0.1, 0.2) for h in (1, 3)]),
+    "streak": (streak, [dict(n=n, trend=t) for n in (3, 4) for t in (False, True)]),
+    "dip_vote": (dip_vote, [dict(votes=v, trend=t) for v in (2, 3) for t in (False, True)]),
+    "ml_pool": (ml_pool, [dict(k=k, scope=sc) for k in (0.3, 0.6) for sc in ("indices", "all")]),
+}
+IDEAS.update(IDEAS4)
+
+
+# ============================================================================ VAGUE 5 : futures CFD sans swap (MT5)
+"""
+  vix_carry  Prime de volatilité : les futures VIX valent presque toujours plus que le VIX au comptant (courbe
+             « en contango ») et glissent vers lui -> on VEND le future VIX quand la courbe est bien en contango
+             (VIX / VIX3M bas) et que la peur reflue ; on sort dès que la courbe s'aplatit. Risque connu :
+             pertes brutales lors des krachs (février 2018, mars 2020) -> stop + sortie sur aplatissement.
+  fut_trend  Suivi de tendance (Donchian) sur pétrole WTI, Brent et indice dollar : SANS swap sur les futures
+             CFD, la tendance n'est plus mangée par le financement.
+"""
+
+
+def vix_carry(data, ctx, thr=0.9, stop=2.5):
+    out = {}
+    if "VIXF" not in data:
+        return out
+    df = data["VIXF"]
+    v = _vix(ctx, df.index)
+    v3 = ctx["vix3m"].close.reindex(df.index, method="ffill")
+    ratio = v / v3
+    calm = (ratio < thr) & (v < v.rolling(10).mean())
+    ent = pd.Series(np.where(calm, -1, 0), index=df.index)
+    out["VIXF"] = (ent, None, ratio > 0.97, ExitRules(stop_atr=stop, max_bars=40))
+    return out
+
+
+def fut_trend(data, ctx, n=55, stop=3.0):
+    from .indicators import donchian
+    out = {}
+    for s, df in data.items():
+        if s not in ("WTIF", "BRENTF", "DXYF", "GOLDF"):
+            continue
+        hi, lo = donchian(df, n)
+        xhi, xlo = donchian(df, max(5, n // 2))
+        ent = pd.Series(np.where(df.close > hi, 1, np.where(df.close < lo, -1, 0)), index=df.index)
+        out[s] = (ent, df.close < xlo, df.close > xhi, ExitRules(stop_atr=stop, max_bars=250))
+    return out
+
+
+IDEAS5 = {
+    "vix_carry": (vix_carry, [dict(thr=t, stop=st) for t in (0.85, 0.92) for st in (2.0, 3.0)]),
+    "fut_trend": (fut_trend, [dict(n=n, stop=st) for n in (20, 55) for st in (2.0, 3.0)]),
+}
+IDEAS.update(IDEAS5)

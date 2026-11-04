@@ -19,7 +19,7 @@ from .instruments import UNIVERSE
 FEATURES = ["fam_code", "dir", "kind_code", "vol_rank", "er20", "er50", "trend200", "mom63", "rsi14",
             "atr_pct", "carry", "dist20", "dow", "event_soon", "mkt_vol", "recent_cfg", "recent_fam"]
 FAM_CODES = {f: i for i, f in enumerate(["donchian", "ma_cross", "tsmom", "mean_rev", "rsi2", "xs_mom", "carry", "trend_long", "tsmom_slow"])}
-KIND_CODES = {"fx": 0, "metal": 1, "index": 2}
+KIND_CODES = {"fx": 0, "metal": 1, "index": 2, "future": 3}
 
 
 def instrument_features(data: dict, rates: pd.DataFrame | None, events: pd.DataFrame | None) -> dict:

@@ -1,0 +1,119 @@
+{
+  "v2|RESERVE2_jamais_vu": {
+    "rendement_total": -0.152,
+    "cagr": -0.01,
+    "sharpe": -0.264,
+    "max_dd": -0.21,
+    "n_trades": 557,
+    "win": 0.551,
+    "pf": 0.841,
+    "avg_r": -0.043,
+    "pf_ok": false,
+    "sharpe_ok": false,
+    "dd_ok": false,
+    "annees_positives": "4/11",
+    "instruments_positifs": "4/13",
+    "par_idee_R": {
+      "carry_safe": -0.102,
+      "idx_dip": 0.003
+    }
+  },
+  "v2|pool_32": {
+    "rendement_total": 0.362,
+    "cagr": 0.019,
+    "sharpe": 0.405,
+    "max_dd": -0.133,
+    "n_trades": 899,
+    "win": 0.59,
+    "pf": 1.219,
+    "avg_r": 0.053,
+    "pf_ok": false,
+    "sharpe_ok": false,
+    "dd_ok": true,
+    "annees_positives": "12/17",
+    "instruments_positifs": "16/27",
+    "par_idee_R": {
+      "carry_safe": 0.067,
+      "idx_dip": 0.043
+    }
+  },
+  "v2|tout_46": {
+    "rendement_total": 0.063,
+    "cagr": 0.004,
+    "sharpe": 0.096,
+    "max_dd": -0.18,
+    "n_trades": 1116,
+    "win": 0.572,
+    "pf": 1.034,
+    "avg_r": 0.01,
+    "pf_ok": false,
+    "sharpe_ok": false,
+    "dd_ok": true,
+    "annees_positives": "10/17",
+    "instruments_positifs": "20/39",
+    "par_idee_R": {
+      "carry_safe": 0.002,
+      "idx_dip": 0.016
+    }
+  },
+  "v3|RESERVE2_jamais_vu": {
+    "rendement_total": -0.147,
+    "cagr": -0.01,
+    "sharpe": -0.24,
+    "max_dd": -0.201,
+    "n_trades": 676,
+    "win": 0.561,
+    "pf": 0.86,
+    "avg_r": -0.036,
+    "pf_ok": false,
+    "sharpe_ok": false,
+    "dd_ok": false,
+    "annees_positives": "4/11",
+    "instruments_positifs": "6/13",
+    "par_idee_R": {
+      "carry_safe": -0.098,
+      "dip_vote": -0.001,
+      "idx_dip": -0.001
+    }
+  },
+  "v3|pool_32": {
+    "rendement_total": 0.18,
+    "cagr": 0.01,
+    "sharpe": 0.221,
+    "max_dd": -0.164,
+    "n_trades": 1146,
+    "win": 0.594,
+    "pf": 1.095,
+    "avg_r": 0.025,
+    "pf_ok": false,
+    "sharpe_ok": false,
+    "dd_ok": true,
+    "annees_positives": "10/17",
+    "instruments_positifs": "17/27",
+    "par_idee_R": {
+      "carry_safe": 0.061,
+      "dip_vote": -0.004,
+      "idx_dip": 0.026
+    }
+  },
+  "v3|tout_46": {
+    "rendement_total": 0.054,
+    "cagr": 0.003,
+    "sharpe": 0.084,
+    "max_dd": -0.177,
+    "n_trades": 1376,
+    "win": 0.589,
+    "pf": 1.025,
+    "avg_r": 0.008,
+    "pf_ok": false,
+    "sharpe_ok": false,
+    "dd_ok": true,
+    "annees_positives": "9/17",
+    "instruments_positifs": "20/39",
+    "par_idee_R": {
+      "carry_safe": 0.009,
+      "dip_vote": 0.007,
+      "idx_dip": 0.011
+    }
+  }
+}

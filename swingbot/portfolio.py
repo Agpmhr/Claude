@@ -33,6 +33,7 @@ class RiskConfig:
     max_dd_stop: float = 0.20          # -20 % depuis le plus haut -> arrêt complet (intervention humaine)
     lot_rounding: bool = True          # arrondi au 0,01 lot (contrainte réelle du broker)
     max_round_up: float = 1.5          # si le lot minimum dépasse 1,5x le risque voulu -> trade refusé
+    one_per_symbol: bool = True        # False : plusieurs sous-stratégies peuvent tenir le même instrument
     score_col: str | None = None       # colonne de score pour classer et dimensionner (None = pas d'IA)
     min_score: float | None = None     # seuil de filtrage sur le score
 
@@ -105,7 +106,7 @@ def run_portfolio(trades: pd.DataFrame, paths: list, data: dict, conv: pd.DataFr
             g = g.sample(frac=1.0, random_state=int(d.value % 2**31))   # ordre neutre
         for ti, t in g.iterrows():
             inst = UNIVERSE[t.sym]
-            if any(p["sym"] == t.sym for p in open_pos):
+            if any(p["sym"] == t.sym and (cfg.one_per_symbol or p["strategy"] == t.strategy) for p in open_pos):
                 skipped["doublon"] += 1
                 continue
             mult = 1.0
@@ -145,7 +146,7 @@ def run_portfolio(trades: pd.DataFrame, paths: list, data: dict, conv: pd.DataFr
                 skipped["marge"] += 1
                 continue
             dts = data[t.sym].index[int(t.entry_i): int(t.entry_i) + len(paths[ti])]
-            open_pos.append(dict(idx=ti, sym=t.sym, dir=t.dir, ccys=ccys, units=units, risk_eur=risk_eur,
+            open_pos.append(dict(idx=ti, sym=t.sym, strategy=t.strategy, dir=t.dir, ccys=ccys, units=units, risk_eur=risk_eur,
                                  lots=lots, margin=margin, path=paths[ti], dates=dts.to_numpy(),
                                  exit_time=t.exit_time, val=0.0, mult=mult))
     eqs = pd.Series(curve, index=days)

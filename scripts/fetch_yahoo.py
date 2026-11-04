@@ -53,7 +53,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     now = int(time.time())
     s0 = int(datetime.fromisoformat(args.start).replace(tzinfo=timezone.utc).timestamp())
-    extra = {"VIX": "^VIX"}
+    extra = {"VIX": "^VIX", "VIX3M": "^VIX3M"}
     for sym, tk in extra.items():
         fetch(tk, "1d", s0, now).to_csv(out / f"{sym}_D1.csv", index=False)
     for sym, spec in UNIVERSE.items():

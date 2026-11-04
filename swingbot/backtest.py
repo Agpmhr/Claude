@@ -73,7 +73,7 @@ def simulate(sym: str, df: pd.DataFrame, entry: pd.Series, exit_long: pd.Series 
         ei = sig_i + 1
         if ei >= n or not np.isfinite(a[sig_i]) or a[sig_i] <= 0:
             return None
-        spr_in = cost.spread(inst, hours[ei], tf, ev[ei])
+        spr_in = cost.spread(inst, hours[ei], tf, ev[ei], o[ei])
         slip_in = cost.slippage_spreads * spr_in
         px_in = o[ei] + d * (spr_in / 2 + slip_in)
         stop_dist = rules.stop_atr * a[sig_i]
@@ -97,7 +97,7 @@ def simulate(sym: str, df: pd.DataFrame, entry: pd.Series, exit_long: pd.Series 
                 elif target is not None and d * ((h[i] if d > 0 else l[i]) - target) >= 0:
                     reason, xi, raw = "objectif", i, target
                 if xi is not None:
-                    spr = cost.spread(inst, hours[i], tf, ev[i])
+                    spr = cost.spread(inst, hours[i], tf, ev[i], o[i])
                     extra = cost.stop_slippage_spreads * spr if reason in ("stop", "gap") else 0.0
                     px_out = raw - d * (spr / 2 + extra)
                     c_spread += (spr / 2) / stop_dist
@@ -121,7 +121,7 @@ def simulate(sym: str, df: pd.DataFrame, entry: pd.Series, exit_long: pd.Series 
                     reason = "temps"
                 if ent[i] == -d:
                     reason = "retournement"
-                spr = cost.spread(inst, hours[xi], tf, ev[xi])
+                spr = cost.spread(inst, hours[xi], tf, ev[xi], o[xi])
                 raw = o[xi] if i + 1 < n else c[i]
                 px_out = raw - d * (spr / 2 + cost.slippage_spreads * spr)
                 c_spread += (spr / 2) / stop_dist

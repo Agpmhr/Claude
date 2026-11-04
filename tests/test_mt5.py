@@ -72,3 +72,27 @@ def test_make_broker_selects_mt5(monkeypatch):
     from swingbot.ctrader import make_broker
     from swingbot.mt5_broker import MT5Broker
     assert isinstance(make_broker(), MT5Broker)
+
+
+def test_futures_sizing_from_tick_value_and_stop_pct(monkeypatch):
+    m = fake_mt5()
+    m.symbol_select = lambda n, b: True
+    m.symbol_info = lambda n: NS(volume_step=0.01, volume_min=0.01, trade_stops_level=0, point=0.01, digits=2,
+                                 filling_mode=2, trade_tick_size=0.01, trade_tick_value=0.92)   # 0,92 € par tick
+    m.symbol_info_tick = lambda n: NS(bid=70.00, ask=70.04)
+    monkeypatch.setitem(sys.modules, "MetaTrader5", m)
+    from swingbot.mt5_broker import MT5Broker
+    res = MT5Broker("demo").execute([OrderIntent("WTIF", 1, 0.0, 0.5, "v4", stop_pct=0.05, risk_eur=25.0)], [])
+    # stop = 5 % de 70,04 = 3,502 $ -> 350,2 ticks x 0,92 € = 322,2 € par lot -> 25 € = 0,07 lot
+    assert res[0]["ok"] and m.sent[0]["volume"] == 0.07 and m.sent[0]["symbol"] == "WTI"
+    assert abs(m.sent[0]["sl"] - round(70.04 - 3.502, 2)) < 1e-9
+
+
+def test_close_reason_detects_expiry_vs_stop(monkeypatch):
+    m = fake_mt5()
+    m.DEAL_REASON_SL, m.DEAL_REASON_CLIENT = 4, 0
+    m.history_deals_get = lambda position: [NS(entry=0, reason=3), NS(entry=1, reason=4 if position == 1 else 5)]
+    monkeypatch.setitem(sys.modules, "MetaTrader5", m)
+    from swingbot.mt5_broker import MT5Broker
+    assert MT5Broker("demo").close_reason(1) == "stop"
+    assert MT5Broker("demo").close_reason(2) == "autre"

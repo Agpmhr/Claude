@@ -1,0 +1,150 @@
+{
+  "systeme": "fut_trend ensemble 55/100/150, stop 3 ATR, 0,4 %/signal",
+  "essais_total_nuit": 124,
+  "A_TEST_2024_2026_petrole_dollar": {
+    "rendement_total": 0.023,
+    "cagr": 0.011,
+    "sharpe": 0.152,
+    "max_dd": -0.164,
+    "n_trades": 47,
+    "win": 0.298,
+    "pf": 1.163,
+    "avg_r": 0.158,
+    "pf_ok": false,
+    "sharpe_ok": false,
+    "dd_ok": true,
+    "annees_positives": "1/2",
+    "instruments_positifs": "2/3",
+    "par_instrument_R": {
+      "BRENTF": {
+        "size": 18,
+        "mean": 0.435
+      },
+      "DXYF": {
+        "size": 12,
+        "mean": -0.611
+      },
+      "WTIF": {
+        "size": 17,
+        "mean": 0.41
+      }
+    }
+  },
+  "B_OR_futures_2010_2026_jamais_teste": {
+    "rendement_total": 0.409,
+    "cagr": 0.021,
+    "sharpe": 0.431,
+    "max_dd": -0.128,
+    "n_trades": 119,
+    "win": 0.37,
+    "pf": 2.405,
+    "avg_r": 0.817,
+    "pf_ok": true,
+    "sharpe_ok": false,
+    "dd_ok": true,
+    "annees_positives": "11/17",
+    "instruments_positifs": "1/1",
+    "par_instrument_R": {
+      "GOLDF": {
+        "size": 119,
+        "mean": 0.817
+      }
+    }
+  },
+  "recherche_2010_2024_petrole_dollar": {
+    "rendement_total": -0.079,
+    "cagr": -0.006,
+    "sharpe": -0.131,
+    "max_dd": -0.206,
+    "n_trades": 62,
+    "win": 0.226,
+    "pf": 0.577,
+    "avg_r": -0.316,
+    "pf_ok": false,
+    "sharpe_ok": false,
+    "dd_ok": false,
+    "annees_positives": "1/3",
+    "instruments_positifs": "1/3",
+    "par_instrument_R": {
+      "BRENTF": {
+        "size": 17,
+        "mean": 0.38
+      },
+      "DXYF": {
+        "size": 20,
+        "mean": -0.361
+      },
+      "WTIF": {
+        "size": 25,
+        "mean": -0.754
+      }
+    }
+  },
+  "tout_2010_2026_4_instruments": {
+    "rendement_total": -0.062,
+    "cagr": -0.004,
+    "sharpe": -0.064,
+    "max_dd": -0.206,
+    "n_trades": 73,
+    "win": 0.274,
+    "pf": 0.711,
+    "avg_r": -0.203,
+    "pf_ok": false,
+    "sharpe_ok": false,
+    "dd_ok": false,
+    "annees_positives": "1/3",
+    "instruments_positifs": "2/4",
+    "par_instrument_R": {
+      "BRENTF": {
+        "size": 17,
+        "mean": 0.32
+      },
+      "DXYF": {
+        "size": 17,
+        "mean": -0.326
+      },
+      "GOLDF": {
+        "size": 16,
+        "mean": 0.172
+      },
+      "WTIF": {
+        "size": 23,
+        "mean": -0.76
+      }
+    }
+  },
+  "robustesse_couts_x2_tout": {
+    "sharpe": -0.078,
+    "pf": 0.676,
+    "max_dd": -0.212,
+    "cagr": -0.005
+  },
+  "monte_carlo_dd_p50_p95_p99": [
+    -0.087,
+    -0.118,
+    -0.128
+  ],
+  "par_annee": {
+    "2011": -0.042,
+    "2012": -0.064,
+    "2013": 0.0,
+    "2014": 0.0,
+    "2015": 0.0,
+    "2016": 0.0,
+    "2017": 0.0,
+    "2018": 0.0,
+    "2019": 0.0,
+    "2020": 0.0,
+    "2021": 0.0,
+    "2022": 0.0,
+    "2023": 0.0,
+    "2024": 0.0,
+    "2025": 0.0,
+    "2026": 0.0
+  },
+  "mensuel_p10_p50_p90": [
+    0.0,
+    0.0,
+    0.0
+  ]
+}
