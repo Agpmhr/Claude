@@ -38,14 +38,27 @@ jobs:
           app_main.py
 
       - name: Installer MetaTrader 5 (pour compiler l'Expert)
-        continue-on-error: true
-        timeout-minutes: 10
+        timeout-minutes: 12
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe" -OutFile mt5setup.exe
           Start-Process -FilePath .\mt5setup.exe -ArgumentList "/auto" -Wait
-          Start-Sleep -Seconds 20
+          Start-Sleep -Seconds 10
           Get-Process terminal64 -ErrorAction SilentlyContinue | Stop-Process -Force
+          $term = Get-ChildItem -Path "C:\Program Files" -Recurse -Filter terminal64.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $term) { Write-Error "terminal64.exe introuvable"; exit 1 }
+          Write-Host "Terminal : $($term.FullName)"
+          # 1er lancement en mode portable : décompresse la bibliothèque standard MQL5 dans le dossier d'installation
+          Start-Process -FilePath $term.FullName -ArgumentList "/portable"
+          $found = $null
+          for ($i = 0; $i -lt 60 -and -not $found; $i++) {
+            Start-Sleep -Seconds 5
+            $found = Get-ChildItem -Path $term.DirectoryName, "$env:APPDATA\MetaQuotes" -Recurse -Filter Trade.mqh -ErrorAction SilentlyContinue |
+                     Where-Object { $_.FullName -match "Include\\Trade\\Trade.mqh$" } | Select-Object -First 1
+          }
+          Get-Process terminal64 -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not $found) { Get-ChildItem $term.DirectoryName | Format-Table Name; Write-Error "Trade.mqh jamais apparu"; exit 1 }
+          Write-Host "Bibliothèque MQL5 : $($found.FullName)"
 
       - name: Compiler SwingbotV4.mq5
         id: compile
@@ -55,7 +68,7 @@ jobs:
           $me = Get-ChildItem -Path "C:\Program Files" -Recurse -Filter metaeditor64.exe -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $me) { Write-Error "MetaEditor introuvable"; exit 1 }
           # dossier MQL5 contenant Include\Trade\Trade.mqh (installation ou dossier de données)
-          $tr = Get-ChildItem -Path "C:\Program Files", "$env:APPDATA\MetaQuotes" -Recurse -Filter Trade.mqh -ErrorAction SilentlyContinue |
+          $tr = Get-ChildItem -Path "C:\Program Files", "$env:APPDATA\MetaQuotes", "$env:LOCALAPPDATA" -Recurse -Filter Trade.mqh -ErrorAction SilentlyContinue |
                 Where-Object { $_.FullName -match "Include\\Trade\\Trade.mqh$" } | Select-Object -First 1
           if (-not $tr) { Write-Error "Bibliothèque standard MQL5 introuvable"; exit 1 }
           $mql5 = $tr.Directory.Parent.Parent.FullName
