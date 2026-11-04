@@ -1,6 +1,6 @@
 """Chargement des données + contrôle qualité + données synthétiques de secours.
 
-Priorité des sources : data/dukascopy/<SYM>_<TF>.csv (si vous les déposez) puis data/yahoo/.
+Priorité des sources : data/mt5/ (export du broker) puis data/dukascopy/<SYM>_<TF>.csv puis data/yahoo/.
 Toutes les dates sont en UTC. Les bougies D1 sont indexées par date (sans heure).
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ class QCReport:
 
 
 def _read(sym: str, tf: str) -> pd.DataFrame | None:
-    for src in ("dukascopy", "yahoo"):
+    for src in ("mt5", "dukascopy", "yahoo"):
         p = DATA / src / f"{sym}_{tf}.csv"
         if p.exists():
             df = pd.read_csv(p)

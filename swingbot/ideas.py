@@ -174,3 +174,108 @@ def generate_ideas(data, ctx, cost, ideas=None):
     trades["block"] = block_of(trades["entry_time"])
     trades["exit_block"] = block_of(trades["exit_time"])
     return trades, paths
+
+
+# ============================================================================ VAGUE 3
+"""
+  trend_carry  Suivi de tendance FX UNIQUEMENT dans le sens où le swap est positif : on combine deux primes
+               (tendance + portage) et le temps joue pour nous au lieu de nous coûter. Idée maison.
+  fx_rev_xs    Retournement transversal hebdomadaire en FX : on achète les paires les plus faibles de la semaine
+               et on vend les plus fortes (excès de flux de court terme). Littérature : reversal court terme.
+  squeeze      Contraction de volatilité (ATR court / ATR long bas) puis entrée dans le sens de la tendance
+               de fond : la volatilité revient toujours, on se place du bon côté. Classique « NR7/squeeze ».
+  idx_dip_vix  idx_dip seulement quand le VIX est au-dessus de sa médiane d'un an : on fournit de la liquidité
+               quand elle est chère. Raffinement de la vague 2.
+  fx_dip_carry Rachat de repli (RSI(2) bas) sur les paires FX, seulement dans le sens du swap positif. Idée maison.
+"""
+
+
+def _carry_dir(ctx, inst, index):
+    r = ctx["rates"].reindex(index, method="ffill").shift(1)
+    return r[inst.base] - r[inst.quote]
+
+
+def trend_carry(data, ctx, n=55, thr=0.005, stop=3.0):
+    from .indicators import donchian
+    out = {}
+    for s, df in data.items():
+        inst = UNIVERSE[s]
+        if inst.kind != "fx":
+            continue
+        diff = _carry_dir(ctx, inst, df.index)
+        hi, lo = donchian(df, n)
+        xhi, xlo = donchian(df, n // 2)
+        ent = pd.Series(np.where((df.close > hi) & (diff > thr), 1, np.where((df.close < lo) & (diff < -thr), -1, 0)),
+                        index=df.index)
+        out[s] = (ent, (df.close < xlo) | (diff <= 0), (df.close > xhi) | (diff >= 0),
+                  ExitRules(stop_atr=stop, max_bars=150))
+    return out
+
+
+def fx_rev_xs(data, ctx, lookback=5, k=2, hold=5, stop=2.5):
+    fx = [s for s in data if UNIVERSE[s].kind == "fx"]
+    close = pd.concat({s: data[s].close for s in fx}, axis=1).sort_index().ffill(limit=3)
+    vol = np.log(close).diff().rolling(60).std() * np.sqrt(lookback)
+    score = np.log(close / close.shift(lookback)) / vol
+    reb = pd.Series(close.index.dayofweek == 4, index=close.index)       # chaque vendredi
+    rk = score.rank(axis=1)
+    cnt = score.notna().sum(axis=1)
+    pos = (rk.le(k, axis=0).astype(int) - rk.gt(cnt - k, axis=0).astype(int)).where(reb & (cnt >= 2 * k))
+    out = {}
+    for s in fx:
+        p = pos[s].reindex(data[s].index)
+        out[s] = (p.where(p != 0).fillna(0).astype(int), None, None, ExitRules(stop_atr=stop, max_bars=hold))
+    return out
+
+
+def squeeze(data, ctx, ratio=0.6, hold=8, stop=2.5):
+    from .indicators import atr as _atr
+    out = {}
+    for s, df in data.items():
+        a5, a50 = _atr(df, 5), _atr(df, 50)
+        sq = (a5 / a50) < ratio
+        trend = np.sign(df.close - df.close.rolling(100).mean())
+        first = sq & ~sq.shift(1, fill_value=False)
+        ent = pd.Series(np.where(first, trend, 0), index=df.index).fillna(0).astype(int)
+        if UNIVERSE[s].kind == "index":
+            ent = ent.clip(lower=0)            # pas de vente à découvert d'indices (prime de risque)
+        out[s] = (ent, None, None, ExitRules(stop_atr=stop, max_bars=hold))
+    return out
+
+
+def idx_dip_vix(data, ctx, lo=10, q=0.5, stop=3.0):
+    out = {}
+    for s, df in data.items():
+        if not _idx(s):
+            continue
+        r = rsi(df.close, 2)
+        v = _vix(ctx, df.index)
+        fearful = v > v.rolling(252, min_periods=120).quantile(q)
+        ent = pd.Series(np.where((r < lo) & fearful, 1, 0), index=df.index)
+        out[s] = (ent, r > 60, None, ExitRules(stop_atr=stop, max_bars=6))
+    return out
+
+
+def fx_dip_carry(data, ctx, lo=10, thr=0.01, stop=2.5):
+    out = {}
+    for s, df in data.items():
+        inst = UNIVERSE[s]
+        if inst.kind != "fx":
+            continue
+        diff = _carry_dir(ctx, inst, df.index)
+        r = rsi(df.close, 2)
+        ent = pd.Series(np.where((r < lo) & (diff > thr), 1, np.where((r > 100 - lo) & (diff < -thr), -1, 0)),
+                        index=df.index)
+        out[s] = (ent, r > 60, r < 40, ExitRules(stop_atr=stop, max_bars=6))
+    return out
+
+
+IDEAS3 = {
+    "trend_carry": (trend_carry, [dict(n=n, thr=t) for n in (20, 55) for t in (0.005, 0.015)]),
+    "fx_rev_xs": (fx_rev_xs, [dict(lookback=lb, k=k) for lb in (5, 10) for k in (2, 3)]),
+    "squeeze": (squeeze, [dict(ratio=r, hold=h) for r in (0.5, 0.7) for h in (5, 10)]),
+    "idx_dip_vix": (idx_dip_vix, [dict(lo=lo, q=q) for lo in (5, 15) for q in (0.5, 0.7)]),
+    "fx_dip_carry": (fx_dip_carry, [dict(lo=lo, thr=t) for lo in (5, 15) for t in (0.005, 0.015)]),
+}
+IDEAS.update(IDEAS3)
+N_IDEA3_CONFIGS = sum(len(g) for _, g in IDEAS3.values())
