@@ -30,6 +30,8 @@ class Instrument:
     swap_markup: float = 0.010   # % annuel retenu par le broker de chaque côté
     triple_swap_day: int = 2     # 2 = mercredi (FX/métaux), 4 = vendredi (indices)
     rate_ccy: str = ""           # devise du taux de financement (indices, métaux)
+    spread_pct: float = 0.0      # spread en % du prix (futures CFD, données ETF de substitution)
+    fixed_swap: tuple = ()       # (long, short) annuels fixes : futures CFD = pas de swap ; frais de l'ETF neutralisés
 
 
 UNIVERSE: dict[str, Instrument] = {i.sym: i for i in [
@@ -114,6 +116,25 @@ HOLDOUT2_LIST = [
 ]
 HOLDOUT2 = [i.sym for i in HOLDOUT2_LIST]
 UNIVERSE.update({i.sym: i for i in HOLDOUT2_LIST})
+# Futures CFD d'IC Markets (MT4/MT5 uniquement) : SANS swap, coût de portage intégré au prix du futur.
+# Historique : ETF qui détiennent ces futures (VIXY, USO, BNO, UUP) ou l'or physique (GLD).
+# Correction : prix ETF = futures + intérêts de la trésorerie - frais de gestion (GLD : comptant - frais, alors
+# qu'un future coûte le taux d'intérêt). Donc futures CFD = ETF - taux USD + frais : fixed_swap = (frais, -frais)
+# et le taux USD est retiré à l'acheteur / rendu au vendeur dans costs.swap_rates.
+FUTURES_LIST = [
+    Instrument("VIXF", "VIXY", "future", "VOL", "USD", 0.01, 1, 0, 10, commission=False,
+               spread_pct=0.07 / 17, fixed_swap=(0.0085, -0.0085)),
+    Instrument("WTIF", "USO", "future", "OIL", "USD", 0.01, 1, 0, 10, commission=False,
+               spread_pct=0.04 / 65, fixed_swap=(0.008, -0.008)),
+    Instrument("BRENTF", "BNO", "future", "OIL", "USD", 0.01, 1, 0, 10, commission=False,
+               spread_pct=0.03 / 70, fixed_swap=(0.010, -0.010)),
+    Instrument("DXYF", "UUP", "future", "DXY", "USD", 0.01, 1, 0, 10, commission=False,
+               spread_pct=0.03 / 100, fixed_swap=(0.0078, -0.0078)),
+    Instrument("GOLDF", "GLD", "future", "XAU", "USD", 0.01, 1, 0, 10, commission=False,
+               spread_pct=0.23 / 2000, fixed_swap=(0.004, -0.004)),
+]
+FUTURES = [i.sym for i in FUTURES_LIST]
+UNIVERSE.update({i.sym: i for i in FUTURES_LIST})
 POOL = RESEARCH + HOLDOUT   # pool de recherche à partir de la vague 4 (32 instruments)
 INDICES = [s for s, i in UNIVERSE.items() if i.kind == "index"]
 
@@ -138,6 +159,6 @@ def currencies_of(inst: Instrument) -> tuple[str, str]:
     """Devises d'exposition, pour les limites par devise (l'or compte comme 'XAU', les indices comme leur devise + 'EQ')."""
     if inst.kind == "fx":
         return inst.base, inst.quote
-    if inst.kind == "metal":
+    if inst.kind in ("metal", "future"):
         return inst.base, inst.quote
     return "EQ", inst.quote

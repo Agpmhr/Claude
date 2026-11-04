@@ -363,7 +363,7 @@ def _ml_features(df, ctx, s):
         f["carry"] = _carry_dir(ctx, inst, df.index)
     else:
         f["carry"] = 0.0
-    f["kind"] = {"fx": 0, "metal": 1, "index": 2}[inst.kind]
+    f["kind"] = {"fx": 0, "metal": 1, "index": 2, "future": 3}[inst.kind]
     # cible : mouvement de l'ouverture t+1 à l'ouverture t+6, en ATR (utilisée SEULEMENT pour l'entraînement)
     y = (df.open.shift(-6) - df.open.shift(-1)) / a
     return f, y
@@ -409,3 +409,48 @@ IDEAS4 = {
     "ml_pool": (ml_pool, [dict(k=k, scope=sc) for k in (0.3, 0.6) for sc in ("indices", "all")]),
 }
 IDEAS.update(IDEAS4)
+
+
+# ============================================================================ VAGUE 5 : futures CFD sans swap (MT5)
+"""
+  vix_carry  Prime de volatilité : les futures VIX valent presque toujours plus que le VIX au comptant (courbe
+             « en contango ») et glissent vers lui -> on VEND le future VIX quand la courbe est bien en contango
+             (VIX / VIX3M bas) et que la peur reflue ; on sort dès que la courbe s'aplatit. Risque connu :
+             pertes brutales lors des krachs (février 2018, mars 2020) -> stop + sortie sur aplatissement.
+  fut_trend  Suivi de tendance (Donchian) sur pétrole WTI, Brent et indice dollar : SANS swap sur les futures
+             CFD, la tendance n'est plus mangée par le financement.
+"""
+
+
+def vix_carry(data, ctx, thr=0.9, stop=2.5):
+    out = {}
+    if "VIXF" not in data:
+        return out
+    df = data["VIXF"]
+    v = _vix(ctx, df.index)
+    v3 = ctx["vix3m"].close.reindex(df.index, method="ffill")
+    ratio = v / v3
+    calm = (ratio < thr) & (v < v.rolling(10).mean())
+    ent = pd.Series(np.where(calm, -1, 0), index=df.index)
+    out["VIXF"] = (ent, None, ratio > 0.97, ExitRules(stop_atr=stop, max_bars=40))
+    return out
+
+
+def fut_trend(data, ctx, n=55, stop=3.0):
+    from .indicators import donchian
+    out = {}
+    for s, df in data.items():
+        if s not in ("WTIF", "BRENTF", "DXYF", "GOLDF"):
+            continue
+        hi, lo = donchian(df, n)
+        xhi, xlo = donchian(df, max(5, n // 2))
+        ent = pd.Series(np.where(df.close > hi, 1, np.where(df.close < lo, -1, 0)), index=df.index)
+        out[s] = (ent, df.close < xlo, df.close > xhi, ExitRules(stop_atr=stop, max_bars=250))
+    return out
+
+
+IDEAS5 = {
+    "vix_carry": (vix_carry, [dict(thr=t, stop=st) for t in (0.85, 0.92) for st in (2.0, 3.0)]),
+    "fut_trend": (fut_trend, [dict(n=n, stop=st) for n in (20, 55) for st in (2.0, 3.0)]),
+}
+IDEAS.update(IDEAS5)
