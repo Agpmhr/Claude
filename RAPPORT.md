@@ -1,5 +1,59 @@
 # Swingbot : rapport final (nuit du 4 au 5 novembre 2026)
 
+## 🆕🆕 Vagues 4 et 5 : le système v4 (tendance lente sur futures sans swap, MT5)
+
+### Verdict en une phrase
+**Le meilleur candidat de la nuit est la v4 : une tendance lente sur les futures CFD sans swap d'IC Markets (pétrole WTI et Brent, dollar, or), disponibles uniquement sur MT5.** Sur 2010-2026, elle fait un profit factor de 1,64, un Sharpe de 0,42 et +2,7 %/an à 0,25 % de risque par signal, avec une pire baisse de -18 %. Elle reste positive sur l'or, jamais testé avec cette idée (PF 2,4), et sur la période neuve 2024-2026 (PF 1,16 pour pétrole + dollar). Elle **n'atteint toujours pas un Sharpe de 0,8**. **Démo MT5 recommandée, pas d'argent réel.**
+
+![v4](results/v4_equity.png)
+
+### ⚠️ Mauvaise nouvelle d'abord : la v2 ne tient pas
+Testée sur un **2e univers réservé** de 14 instruments jamais vus (7 croisées FX ; indices HK50, ES35, NETH25, SWI20, CA60, US2000, IT40), la v2 fait **PF 0,84, Sharpe -0,26**, et le coupe-circuit se déclenche à -21 %. Sur les 46 instruments réunis, le PF tombe à 1,03, autrement dit rien. Le petit avantage vu en vague 2 était **très probablement de la chance**. La v3 (v2 + vote de replis) échoue de la même façon.
+
+### Vague 4 (recherche sur 32 instruments)
+| Idée | Résultat |
+|---|---|
+| IBS sur indices (Pagonidis 2013) | ✘ disparaît après coûts, une fois l'entrée faite à l'ouverture suivante |
+| Série de N baisses sur indices | ✘ 2 réglages sur 4 |
+| dip_vote : plusieurs signaux de repli d'accord (maison) | ✅ 3/4 en recherche → **✘ sur l'univers réservé n°2** |
+| **IA directe** : un LightGBM commun à tous les instruments prédit le mouvement à 5 jours, réentraîné chaque année | ✘ positif avant frais en validation, négatif en 2010-2018 |
+
+### Vague 5 : les futures CFD **sans swap** (MT4/MT5 uniquement chez IC Markets)
+IC Markets EU propose des futures CFD sur le **VIX, le WTI, le Brent et le dollar (DXY)**, plus l'or (GC), **sans swap** : le coût de portage est intégré au prix. C'est exactement ce qui tuait le suivi de tendance en vague 1.
+- **Données** : des ETF qui détiennent ces futures servent de substituts (VIXY, USO, BNO, UUP, GLD). Ils sont **corrigés** : le taux d'intérêt USD est retiré aux acheteurs, parce que les ETF touchent des intérêts sur leur trésorerie, contrairement à un CFD. Les frais de gestion sont rendus. Spreads IC : VIX 0,07, WTI 0,04, Brent 0,03, DXY 0,03, GC 0,23.
+- **Prime de volatilité** (vendre le VIX futur quand la courbe est en contango) : ✘ 1 réglage sur 4, avec des pertes de -2,5 R d'un coup lors des krachs. C'est le piège « gros taux de réussite, pertes rares énormes » : je l'élimine.
+- **Tendance (canal de Donchian) sur WTI, Brent et DXY** :
+  - 20 jours : nul (bruit) ;
+  - **55, 100 et 150 jours : tous positifs** sur l'entraînement et la validation, et sur les 3 instruments, de +0,14 à +1,6 R par trade.
+
+### Le verdict v4 (figé et commité avant exécution : `scripts/futures_verdict.py`)
+Système : ensemble des 3 durées 55, 100 et 150 jours, stop à 3 ATR, 0,4 % de risque par signal.
+| Bloc jamais vu | Trades | PF | Sharpe | R moyen |
+|---|---|---|---|---|
+| (A) WTI, Brent et dollar, 2024-11 → 2026-11 | 47 | 1,16 | 0,15 | +0,16 (WTI +0,41, Brent +0,44, **DXY -0,61**) |
+| (B) **Or en futures, 2010-2026** (instrument jamais testé) | 119 | **2,40** | 0,43 | **+0,82** |
+
+- **Le portefeuille complet, tel que figé, s'est arrêté en août 2012** : il a gagné +18 % jusqu'en avril 2011, puis rendu -20 %, et le coupe-circuit a coupé pour de bon. Ce n'est pas un bug, c'est la nature du suivi de tendance : de longues rechutes.
+- **Diagnostic sans coupe-circuit** (pas un verdict, je le signale) :
+
+| Risque/signal | Rendement/an | Sharpe | PF | Pire baisse | Années + |
+|---|---|---|---|---|---|
+| 0,40 % | +4,2 % | 0,43 | 1,63 | -28 % | 11/16 |
+| **0,25 %** | **+2,7 %** | 0,42 | 1,64 | **-18 %** | 11/16 |
+| 0,15 % | +1,7 % | 0,41 | 1,66 | -12 % | 11/16 |
+
+  À 0,25 %, sur 2024-2026 : +5,9 %/an, PF 2,1. **C'est ce réglage (0,25 %) que le bot utilise.**
+- **Limites** : 4 instruments seulement, des données de substitution, un Sharpe d'environ 0,4, et le dollar qui perd sur la période neuve. **124 essais** au total depuis le début de la nuit.
+
+### Le bot MT5 fait tourner la v4 par défaut
+- `SWINGBOT_SYSTEM=v4`. Les signaux sont calculés sur les séries continues ; l'ordre part sur le future du broker, avec un stop en **% du prix**.
+- Le **volume est recalculé par MT5 à partir de la valeur du tick**, donc le risque en euros est exact, quelle que soit la taille du contrat.
+- **Expiration des futures** : le broker clôture au règlement. Le bot détecte la raison de la clôture dans l'historique MT5 (stop, manuel ou autre), puis **rouvre la position sur le contrat suivant** si la tendance tient toujours.
+- Les noms des symboles sont réglables (`SWINGBOT_MT5_MAP`), voir `mt5/LISEZMOI_MT5.md`.
+- 15 tests passent, dont le volume à partir de la valeur du tick et la détection expiration ou stop. Rejouer août-octobre 2026 en mode papier donne 13 entrées, sans erreur.
+
+---
+
 ## 🆕 Vague 2 : système v2 et bot de démo
 
 ### Verdict en une phrase

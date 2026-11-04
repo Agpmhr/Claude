@@ -33,8 +33,10 @@ class OrderIntent:
     sym: str
     side: int            # +1 achat, -1 vente
     lots: float
-    stop_dist: float     # distance du stop en unités de prix
+    stop_dist: float     # distance du stop en unités de prix (données du bot)
     comment: str = ""
+    stop_pct: float | None = None   # distance du stop en % du prix : appliquée au prix du BROKER (futures CFD)
+    risk_eur: float | None = None   # risque voulu : le broker MT5 recalcule le volume avec la valeur du tick
 
 
 @dataclass
@@ -53,6 +55,9 @@ class PaperBroker:
 
     def snapshot(self):
         return dict(equity=self.equity, positions=[])
+
+    def close_reason(self, position_id):
+        return None
 
     def execute(self, orders: list[OrderIntent], closes: list[CloseIntent]):
         return [dict(action="ordre", statut="simulé", **o.__dict__) for o in orders] + \
@@ -103,6 +108,9 @@ class CTraderBroker:
         if "error" in box:
             raise box["error"]
         return box.get("result")
+
+    def close_reason(self, position_id):
+        return None   # non implémenté pour cTrader (les futures CFD n'y sont pas proposés)
 
     # ------------------------------------------------------------------ lecture
     def snapshot(self):
@@ -162,7 +170,12 @@ class CTraderBroker:
 
 
 # noms des symboles chez IC Markets (cTrader) quand ils diffèrent des nôtres
-BROKER_NAMES = {"NAS100": "USTEC", "GER40": "DE40"}
+BROKER_NAMES = {"NAS100": "USTEC", "GER40": "DE40",
+                # futures CFD (MT4/MT5 uniquement chez IC Markets) ; ajustable via SWINGBOT_MT5_MAP (JSON)
+                "WTIF": "WTI", "BRENTF": "BRENT", "DXYF": "DXY", "GOLDF": "GC", "VIXF": "VIX"}
+if os.environ.get("SWINGBOT_MT5_MAP"):
+    import json as _json
+    BROKER_NAMES.update(_json.loads(os.environ["SWINGBOT_MT5_MAP"]))
 
 
 def broker_symbol(sym: str) -> str:

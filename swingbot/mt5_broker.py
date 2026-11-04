@@ -84,6 +84,25 @@ class MT5Broker:
         finally:
             mt5.shutdown()
 
+    def close_reason(self, position_id):
+        """Pourquoi une position a disparu : 'stop' (stop touché), 'manuel', ou 'autre' (ex. expiration
+        d'un futures CFD, clôturé par le broker au prix de règlement)."""
+        mt5, _ = connect(self.mode)
+        try:
+            deals = mt5.history_deals_get(position=int(position_id)) or []
+            outs = [d for d in deals if getattr(d, "entry", 0) in (1, 3)]   # DEAL_ENTRY_OUT / OUT_BY
+            if not outs:
+                return None
+            r = outs[-1].reason
+            if r == getattr(mt5, "DEAL_REASON_SL", 4) or r == getattr(mt5, "DEAL_REASON_SO", 6):
+                return "stop"
+            if r in (getattr(mt5, "DEAL_REASON_CLIENT", 0), getattr(mt5, "DEAL_REASON_MOBILE", 1),
+                     getattr(mt5, "DEAL_REASON_WEB", 2)):
+                return "manuel"
+            return "autre"
+        finally:
+            mt5.shutdown()
+
     @staticmethod
     def _filling(mt5, info):
         fm = getattr(info, "filling_mode", 0)
@@ -120,13 +139,23 @@ class MT5Broker:
                 info = mt5.symbol_info(name)
                 step = info.volume_step
                 vol = round(int(o.lots / step + 1e-9) * step, 8)
-                if vol < info.volume_min:
+                if vol < info.volume_min and not o.risk_eur:
                     out.append(dict(action="ordre", sym=o.sym, statut=f"volume {vol} < minimum {info.volume_min}"))
                     continue
                 tick = mt5.symbol_info_tick(name)
                 price = tick.ask if o.side > 0 else tick.bid
                 min_dist = info.trade_stops_level * info.point
-                dist = max(o.stop_dist, min_dist * 1.5)
+                dist = price * o.stop_pct if o.stop_pct else o.stop_dist
+                dist = max(dist, min_dist * 1.5)
+                if o.risk_eur:   # volume recalculé avec la valeur du tick du broker (dans la devise du compte)
+                    loss_per_lot = dist / info.trade_tick_size * info.trade_tick_value
+                    vol = round(int(o.risk_eur / loss_per_lot / step + 1e-9) * step, 8)
+                    if vol < info.volume_min and info.volume_min * loss_per_lot <= 1.5 * o.risk_eur:
+                        vol = info.volume_min
+                    if vol < info.volume_min:
+                        out.append(dict(action="ordre", sym=o.sym, statut=f"lot minimum trop gros : "
+                                        f"{info.volume_min * loss_per_lot:.2f} de risque pour {o.risk_eur:.2f} voulus"))
+                        continue
                 sl = round(price - o.side * dist, info.digits)
                 req = dict(action=mt5.TRADE_ACTION_DEAL, symbol=name, volume=vol,
                            type=mt5.ORDER_TYPE_BUY if o.side > 0 else mt5.ORDER_TYPE_SELL, price=price, sl=sl,

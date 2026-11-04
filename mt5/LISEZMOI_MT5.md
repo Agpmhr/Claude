@@ -1,4 +1,14 @@
-# Faire tourner le Swingbot v2 sous MetaTrader 5 (compte DÉMO)
+# Faire tourner le Swingbot sous MetaTrader 5 (compte DÉMO)
+
+**Système par défaut : v4** (`SWINGBOT_SYSTEM=v4`), une tendance lente sur les **futures CFD sans swap**
+WTI, BRENT, DXY et GC (or), proposés par IC Markets **uniquement sur MT4/MT5**.
+Vérifiez dans l'Observateur de marché (clic droit, « Symboles ») le nom exact de ces 4 futures. S'il diffère
+(par exemple avec un mois d'échéance), indiquez-le :
+`$env:SWINGBOT_MT5_MAP='{"WTIF":"WTI_Z6","BRENTF":"BRENT_F7","DXYF":"DXY_Z6","GOLDF":"GC_Z6"}'`
+Ces futures **expirent** : le broker clôture la position au prix de règlement. Au passage suivant, le bot
+le détecte et rouvre la position sur le contrat suivant si la tendance est toujours là. À surveiller les premiers mois.
+Le volume est recalculé par MT5 à partir de la valeur du tick : le risque en euros est donc exact.
+L'ancien système v2 reste disponible avec `SWINGBOT_SYSTEM=v2` (déconseillé : il a échoué sur le 2e univers réservé).
 
 1. **Installer** (une fois) :
    ```powershell

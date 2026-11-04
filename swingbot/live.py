@@ -19,15 +19,29 @@ import pandas as pd
 from .calendar_events import load_events
 from .ctrader import CloseIntent, OrderIntent, make_broker, our_symbol, trading_mode
 from .data import _read, clean, eur_conversion, load_rates, load_universe
-from .ideas import IDEAS
+from .ideas import IDEAS, fut_trend
 from .indicators import atr
-from .instruments import HOLDOUT, LOT_STEP, MIN_LOT, RESEARCH, UNIVERSE, currencies_of
+from .instruments import FUTURES, HOLDOUT, LOT_STEP, MIN_LOT, RESEARCH, UNIVERSE, currencies_of
 from .portfolio import RiskConfig
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / "state" / "live_state.json"
 LOG = ROOT / "logs" / "live_decisions.jsonl"
-SYSTEM = {"idx_dip": dict(lo=5, trend=False), "carry_safe": dict(thr=0.02, vix_max=22.0)}
+# Systèmes disponibles (SWINGBOT_SYSTEM). v4 = le plus solide des tests (voir RAPPORT.md), futures CFD MT5 uniquement.
+SYSTEMS = {
+    "v2": dict(signals=[("idx_dip", IDEAS["idx_dip"][0], dict(lo=5, trend=False)),
+                        ("carry_safe", IDEAS["carry_safe"][0], dict(thr=0.02, vix_max=22.0))],
+               universe=RESEARCH + HOLDOUT, risk=dict(risk_per_trade=0.0075)),
+    "v4": dict(signals=[(f"fut_trend{n}", fut_trend, dict(n=n, stop=3.0)) for n in (55, 100, 150)],
+               universe=[s for s in FUTURES if s != "VIXF"],
+               risk=dict(risk_per_trade=0.0025, one_per_symbol=False, max_ccy_units=12, max_positions=12,
+                         max_open_risk=0.04)),
+}
+SYSTEM_NAME = os.environ.get("SWINGBOT_SYSTEM", "v4")
+SYSTEM = {name: p for name, _, p in SYSTEMS[SYSTEM_NAME]["signals"]}   # compatibilité (comparateur)
+WHY = {"idx_dip": "RSI(2) < 5 : forte baisse sur 2 jours, rachat de repli",
+       "carry_safe": "écart de taux > 2 % et VIX bas et en baisse : on encaisse le swap",
+       "fut_trend": "cassure du canal de Donchian : tendance lente sur futures sans swap"}
 
 
 def log(entry: dict):
@@ -60,11 +74,10 @@ def refresh_data():
     subprocess.run([sys.executable, str(ROOT / "scripts" / "fetch_yahoo.py"), "--force"], check=False)
 
 
-def signals_today(data, ctx):
+def signals_today(data, ctx, system=None):
     """Pour chaque idée et instrument : (entrée, sortie_long, sortie_short, règles, ATR) à la dernière clôture."""
     out = []
-    for name, p in SYSTEM.items():
-        fn = IDEAS[name][0]
+    for name, fn, p in SYSTEMS[system or SYSTEM_NAME]["signals"]:
         for s, (ent, xl, xs, rules) in fn(data, ctx, **p).items():
             a = atr(data[s], rules.atr_n)
             out.append(dict(family=name, sym=s, entry=int(ent.iloc[-1]),
@@ -75,20 +88,25 @@ def signals_today(data, ctx):
     return out
 
 
-def run(capital: float = float(os.environ.get("SWINGBOT_CAPITAL", 1000)), refresh: bool = True, as_of=None):
+def run(capital: float = float(os.environ.get("SWINGBOT_CAPITAL", 1000)), refresh: bool = True, as_of=None,
+        system: str | None = None):
     mode = trading_mode()
-    cfg = RiskConfig(capital=capital)
+    system = system or SYSTEM_NAME
+    sysdef = SYSTEMS[system]
+    cfg = RiskConfig(capital=capital, **sysdef["risk"])
     if refresh:
         refresh_data()
     rates, ev = load_rates(), load_events()
     vix, _ = clean(_read("VIX", "D1"), "VIX", "D1")
-    data, _ = load_universe("D1", RESEARCH + HOLDOUT)
+    conv_src, _ = load_universe("D1", ["EURUSD", "USDJPY", "EURJPY", "EURGBP", "GBPUSD", "USDCHF", "USDCAD",
+                                       "AUDUSD", "NZDUSD"])
+    data, _ = load_universe("D1", sysdef["universe"])
     if as_of is not None:   # rejouer une journée passée (tests / comparaison)
         data = {s: d[d.index <= pd.Timestamp(as_of)] for s, d in data.items()}
         vix = vix[vix.index <= pd.Timestamp(as_of)]
     ctx = dict(rates=rates, events=ev, vix=vix, all_data=data)
     days = pd.DatetimeIndex(sorted(set().union(*[d.index for d in data.values()])))
-    conv = eur_conversion(data, days).iloc[-1]
+    conv = eur_conversion({**conv_src, **data}, days).iloc[-1]
     today = days[-1]
 
     broker = make_broker(capital)
@@ -117,16 +135,22 @@ def run(capital: float = float(os.environ.get("SWINGBOT_CAPITAL", 1000)), refres
     except Exception as e:
         log(dict(type="news", erreur=str(e)))
 
-    sig = signals_today(data, ctx)
+    sig = signals_today(data, ctx, system)
     by_key = {(s["family"], s["sym"]): s for s in sig}
 
     # --- réconciliation avec le broker (positions coupées par le stop)
     if mode != "paper":
         live_ids = {p["position_id"] for p in snap["positions"] if p.get("label") == "swingbot_v2"}
+        reopen = []
         for k, p in list(st["positions"].items()):
             if p.get("position_id") not in live_ids:
-                log(dict(type="sortie_constatee", sym=p["sym"], raison="stop touché ou fermeture manuelle", pos=p))
+                why = broker.close_reason(p.get("position_id")) if p.get("position_id") else None
+                log(dict(type="sortie_constatee", sym=p["sym"], raison=why or "stop touché ou fermeture manuelle",
+                         pos=p))
                 st["positions"].pop(k)
+                # futures CFD : clôturé par le broker à l'expiration -> on reprend la position sur le contrat suivant
+                if why == "autre" and UNIVERSE[p["sym"]].kind == "future":
+                    reopen.append(p)
         for p in snap["positions"]:
             if p.get("label") == "swingbot_v2" and not any(q.get("position_id") == p["position_id"]
                                                           for q in st["positions"].values()):
@@ -162,13 +186,23 @@ def run(capital: float = float(os.environ.get("SWINGBOT_CAPITAL", 1000)), refres
 
     # --- entrées
     orders = []
+    for p in (reopen if mode != "paper" else []):
+        s = by_key.get((p["family"], p["sym"]))
+        if s is None or (p["dir"] > 0 and s["exit_long"]) or (p["dir"] < 0 and s["exit_short"]):
+            continue
+        orders.append(OrderIntent(p["sym"], p["dir"], 0.0, s["stop_dist"], f"roll {p['family']}",
+                                  stop_pct=s["stop_dist"] / s["price"], risk_eur=p.get("risk_eur")))
+        st["positions"][f"{p['family']}|{p['sym']}"] = {**p, "position_id": None}
+        log(dict(type="decision_entree", sym=p["sym"], idee=p["family"], sens=p["dir"],
+                 raison="expiration du futures CFD : réouverture sur le contrat suivant", risque_eur=p.get("risk_eur")))
     open_risk = sum(p.get("risk_eur") or 0 for p in st["positions"].values())
     exp = {}
     for p in st["positions"].values():
         for c_, sgn in zip(currencies_of(UNIVERSE[p["sym"]]), (1, -1)):
             exp[c_] = exp.get(c_, 0.0) + sgn * p["dir"]
     for s in sorted(sig, key=lambda x: x["family"]):
-        if s["entry"] == 0 or any(p["sym"] == s["sym"] for p in st["positions"].values()):
+        if s["entry"] == 0 or any(p["sym"] == s["sym"] and (cfg.one_per_symbol or p["family"] == s["family"])
+                                  for p in st["positions"].values()):
             continue
         inst = UNIVERSE[s["sym"]]
         base = dict(type="decision_entree", sym=s["sym"], idee=s["family"], sens=s["entry"], date_signal=s["date"])
@@ -197,9 +231,9 @@ def run(capital: float = float(os.environ.get("SWINGBOT_CAPITAL", 1000)), refres
                 or not ok_ccy:
             log({**base, "refus": "limites de portefeuille (positions / risque total / exposition par devise)"})
             continue
-        why = {"idx_dip": "RSI(2) < 5 : forte baisse sur 2 jours, rachat de repli",
-               "carry_safe": "écart de taux > 2 % et VIX bas et en baisse : on encaisse le swap"}[s["family"]]
-        orders.append(OrderIntent(s["sym"], s["entry"], float(lots), s["stop_dist"], f"v2 {s['family']}"))
+        why = WHY.get(s["family"].rstrip("0123456789"), s["family"])
+        orders.append(OrderIntent(s["sym"], s["entry"], float(lots), s["stop_dist"], f"{system} {s['family']}",
+                                  stop_pct=s["stop_dist"] / s["price"], risk_eur=float(risk)))
         log({**base, "lots": lots, "risque_eur": round(risk, 2), "stop_prix": s["stop_dist"], "raison": why,
              "score_ia": None, "prix_cloture": s["price"]})
         open_risk += risk
