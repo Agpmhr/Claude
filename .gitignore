@@ -9,3 +9,4 @@ data/yahoo/
 data/dukascopy/
 results/cache/
 logs/
+*.bundle
