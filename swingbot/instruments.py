@@ -133,6 +133,20 @@ FUTURES_LIST = [
     Instrument("GOLDF", "GLD", "future", "XAU", "USD", 0.01, 1, 0, 10, commission=False,
                spread_pct=0.23 / 2000, fixed_swap=(0.004, -0.004)),
 ]
+# Matières premières agricoles (futures CFD IC Markets, sans swap). ETF Teucrium (cash rémunéré, frais ~1 %).
+# Réservées : jamais regardées avant le test « v4 inchangée » (scripts/agri_verdict.py).
+AGRI_LIST = [
+    Instrument("CORNF", "CORN", "future", "AGRI", "USD", 0.01, 1, 0, 10, commission=False,
+               spread_pct=0.88 / 430, fixed_swap=(0.010, -0.010)),
+    Instrument("WHEATF", "WEAT", "future", "AGRI", "USD", 0.01, 1, 0, 10, commission=False,
+               spread_pct=1.15 / 540, fixed_swap=(0.010, -0.010)),
+    Instrument("SOYF", "SOYB", "future", "AGRI", "USD", 0.01, 1, 0, 10, commission=False,
+               spread_pct=1.85 / 1050, fixed_swap=(0.010, -0.010)),
+    Instrument("SUGARF", "CANE", "future", "AGRI", "USD", 0.01, 1, 0, 10, commission=False,
+               spread_pct=0.05 / 18, fixed_swap=(0.010, -0.010)),
+]
+AGRI = [i.sym for i in AGRI_LIST]
+UNIVERSE.update({i.sym: i for i in AGRI_LIST})
 FUTURES = [i.sym for i in FUTURES_LIST]
 UNIVERSE.update({i.sym: i for i in FUTURES_LIST})
 POOL = RESEARCH + HOLDOUT   # pool de recherche à partir de la vague 4 (32 instruments)

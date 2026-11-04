@@ -440,7 +440,7 @@ def fut_trend(data, ctx, n=55, stop=3.0):
     from .indicators import donchian
     out = {}
     for s, df in data.items():
-        if s not in ("WTIF", "BRENTF", "DXYF", "GOLDF"):
+        if UNIVERSE[s].kind != "future" or s == "VIXF":
             continue
         hi, lo = donchian(df, n)
         xhi, xlo = donchian(df, max(5, n // 2))
