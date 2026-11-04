@@ -1,0 +1,97 @@
+# Construit Swingbot.exe (application Windows) et compile l'Expert MT5 SwingbotV4.ex5.
+# Les fichiers sont téléchargeables dans l'onglet « Actions » de GitHub > dernière exécution > Artifacts.
+name: Construire Swingbot.exe et l'Expert MT5
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, swingbot]
+    paths: ["swingbot/**", "mt5/**", "app_main.py", "tests/**", ".github/workflows/build-windows.yml"]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy scipy lightgbm scikit-learn matplotlib pytest MetaTrader5 pyinstaller
+
+      - name: Tests
+        run: python -m pytest -q tests
+
+      - name: Test de la fenêtre (Tk)
+        run: python -c "from swingbot.app import make_app; a = make_app(); a.update(); a.destroy(); print('Fenêtre OK')"
+
+      - name: Construire Swingbot.exe
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name Swingbot
+          --hidden-import MetaTrader5 --collect-submodules swingbot
+          --exclude-module lightgbm --exclude-module sklearn --exclude-module matplotlib
+          app_main.py
+
+      - name: Installer MetaTrader 5 (pour compiler l'Expert)
+        timeout-minutes: 12
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe" -OutFile mt5setup.exe
+          Start-Process -FilePath .\mt5setup.exe -ArgumentList "/auto" -Wait
+          Start-Sleep -Seconds 10
+          Get-Process terminal64 -ErrorAction SilentlyContinue | Stop-Process -Force
+          $term = Get-ChildItem -Path "C:\Program Files" -Recurse -Filter terminal64.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $term) { Write-Error "terminal64.exe introuvable"; exit 1 }
+          Write-Host "Terminal : $($term.FullName)"
+          # 1er lancement en mode portable : décompresse la bibliothèque standard MQL5 dans le dossier d'installation
+          Start-Process -FilePath $term.FullName -ArgumentList "/portable"
+          $found = $null
+          for ($i = 0; $i -lt 60 -and -not $found; $i++) {
+            Start-Sleep -Seconds 5
+            $found = Get-ChildItem -Path $term.DirectoryName, "$env:APPDATA\MetaQuotes" -Recurse -Filter Trade.mqh -ErrorAction SilentlyContinue |
+                     Where-Object { $_.FullName -match "Include\\Trade\\Trade.mqh$" } | Select-Object -First 1
+          }
+          Get-Process terminal64 -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not $found) { Get-ChildItem $term.DirectoryName | Format-Table Name; Write-Error "Trade.mqh jamais apparu"; exit 1 }
+          Write-Host "Bibliothèque MQL5 : $($found.FullName)"
+
+      - name: Compiler SwingbotV4.mq5
+        id: compile
+        timeout-minutes: 8
+        shell: pwsh
+        run: |
+          $me = Get-ChildItem -Path "C:\Program Files" -Recurse -Filter metaeditor64.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $me) { Write-Error "MetaEditor introuvable"; exit 1 }
+          # dossier MQL5 contenant Include\Trade\Trade.mqh (installation ou dossier de données)
+          $tr = Get-ChildItem -Path "C:\Program Files", "$env:APPDATA\MetaQuotes", "$env:LOCALAPPDATA" -Recurse -Filter Trade.mqh -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -match "Include\\Trade\\Trade.mqh$" } | Select-Object -First 1
+          if (-not $tr) { Write-Error "Bibliothèque standard MQL5 introuvable"; exit 1 }
+          $mql5 = $tr.Directory.Parent.Parent.FullName
+          Write-Host "MQL5 trouvé : $mql5"
+          # copie dans un dossier SANS espace (MetaEditor coupe les chemins à l'espace)
+          New-Item -ItemType Directory -Force -Path C:\sb\MQL5\Experts | Out-Null
+          Copy-Item -Recurse -Force "$mql5\Include" C:\sb\MQL5\Include
+          Copy-Item mt5\SwingbotV4.mq5 C:\sb\MQL5\Experts\SwingbotV4.mq5
+          Start-Process -FilePath $me.FullName -ArgumentList '/compile:C:\sb\MQL5\Experts\SwingbotV4.mq5','/inc:C:\sb\MQL5','/log:C:\sb\compile.log' -Wait
+          Get-Content C:\sb\compile.log -Encoding Unicode
+          Copy-Item C:\sb\compile.log mt5\compile.log
+          $log = Get-Content C:\sb\compile.log -Encoding Unicode -Raw
+          if ($log -notmatch "Result: 0 errors") { Write-Error "Compilation de l'Expert : erreurs (voir ci-dessus)"; exit 1 }
+          Copy-Item C:\sb\MQL5\Experts\SwingbotV4.ex5 mt5\SwingbotV4.ex5
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Swingbot-windows
+          path: |
+            dist/Swingbot.exe
+            mt5/SwingbotV4.ex5
+            mt5/SwingbotV4.mq5
+            mt5/compile.log
+            mt5/LISEZMOI_MT5.md
+          if-no-files-found: warn

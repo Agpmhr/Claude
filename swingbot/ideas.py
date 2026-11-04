@@ -217,7 +217,7 @@ def fx_rev_xs(data, ctx, lookback=5, k=2, hold=5, stop=2.5):
     close = pd.concat({s: data[s].close for s in fx}, axis=1).sort_index().ffill(limit=3)
     vol = np.log(close).diff().rolling(60).std() * np.sqrt(lookback)
     score = np.log(close / close.shift(lookback)) / vol
-    reb = pd.Series(close.index.dayofweek == 4, index=close.index)       # chaque vendredi
+    reb = pd.Series(close.index.day_of_week == 4, index=close.index)       # chaque vendredi
     rk = score.rank(axis=1)
     cnt = score.notna().sum(axis=1)
     pos = (rk.le(k, axis=0).astype(int) - rk.gt(cnt - k, axis=0).astype(int)).where(reb & (cnt >= 2 * k))
@@ -356,7 +356,7 @@ def _ml_features(df, ctx, s):
     v = _vix(ctx, df.index)
     f["vix"] = v
     f["vix_ch"] = np.log(v / v.shift(5))
-    f["dow"] = df.index.dayofweek
+    f["dow"] = df.index.day_of_week
     f["dme"] = days_to_month_end(df.index)
     inst = UNIVERSE[s]
     if inst.kind == "fx":

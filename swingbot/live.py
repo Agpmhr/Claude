@@ -24,7 +24,7 @@ from .indicators import atr
 from .instruments import FUTURES, HOLDOUT, LOT_STEP, MIN_LOT, RESEARCH, UNIVERSE, currencies_of
 from .portfolio import RiskConfig
 
-ROOT = Path(__file__).resolve().parents[1]
+from .paths import ROOT  # noqa: E402
 STATE = ROOT / "state" / "live_state.json"
 LOG = ROOT / "logs" / "live_decisions.jsonl"
 # Systèmes disponibles (SWINGBOT_SYSTEM). v4 = le plus solide des tests (voir RAPPORT.md), futures CFD MT5 uniquement.
@@ -63,15 +63,24 @@ def save_state(st: dict):
     STATE.write_text(json.dumps(st, indent=1, default=str))
 
 
-def refresh_data():
-    """Recharge les D1 récentes : depuis MT5 si SWINGBOT_BROKER=mt5 (bougies du broker), sinon Yahoo.
-    VIX : toujours Yahoo (pas forcément disponible chez le broker)."""
-    import subprocess
-    import sys
+FX_CONV = ["EURUSD", "USDJPY", "EURJPY", "EURGBP", "GBPUSD", "USDCHF", "USDCAD", "AUDUSD", "NZDUSD"]
+
+
+def refresh_data(system: str | None = None, log=print):
+    """Recharge les D1 récentes : bougies du broker (MT5) si SWINGBOT_BROKER=mt5, sinon Yahoo. Dans le programme
+    (pas de script externe) pour fonctionner aussi depuis Swingbot.exe."""
+    from .fetch import fetch_prices, fetch_rates
+    sysdef = SYSTEMS[system or SYSTEM_NAME]
+    if not (ROOT / "data" / "rates.csv").exists():
+        fetch_rates(log)
+    if not (ROOT / "data" / "events.csv").exists():
+        from .calendar_events import build_events
+        build_events()
+    syms = list(dict.fromkeys(sysdef["universe"] + FX_CONV))
+    fetch_prices(syms, extra=("VIX",), log=log)
     if os.environ.get("SWINGBOT_BROKER", "").lower() == "mt5" and trading_mode() != "paper":
         from .mt5_broker import export_history
-        export_history(RESEARCH + HOLDOUT, bars=400, mode=trading_mode())
-    subprocess.run([sys.executable, str(ROOT / "scripts" / "fetch_yahoo.py"), "--force"], check=False)
+        export_history([s for s in sysdef["universe"] if UNIVERSE[s].kind != "future"], bars=400, mode=trading_mode())
 
 
 def signals_today(data, ctx, system=None):
@@ -94,12 +103,13 @@ def run(capital: float = float(os.environ.get("SWINGBOT_CAPITAL", 1000)), refres
     system = system or SYSTEM_NAME
     sysdef = SYSTEMS[system]
     cfg = RiskConfig(capital=capital, **sysdef["risk"])
+    if os.environ.get("SWINGBOT_RISQUE_PCT"):          # réglage de l'application (en %)
+        cfg.risk_per_trade = float(os.environ["SWINGBOT_RISQUE_PCT"]) / 100
     if refresh:
-        refresh_data()
+        refresh_data(system)
     rates, ev = load_rates(), load_events()
     vix, _ = clean(_read("VIX", "D1"), "VIX", "D1")
-    conv_src, _ = load_universe("D1", ["EURUSD", "USDJPY", "EURJPY", "EURGBP", "GBPUSD", "USDCHF", "USDCAD",
-                                       "AUDUSD", "NZDUSD"])
+    conv_src, _ = load_universe("D1", FX_CONV)
     data, _ = load_universe("D1", sysdef["universe"])
     if as_of is not None:   # rejouer une journée passée (tests / comparaison)
         data = {s: d[d.index <= pd.Timestamp(as_of)] for s, d in data.items()}
@@ -257,5 +267,37 @@ def run(capital: float = float(os.environ.get("SWINGBOT_CAPITAL", 1000)), refres
     return dict(ordres=len(orders), fermetures=len(closes))
 
 
+def next_run_time(now: datetime, hhmm: str = "22:15") -> datetime:
+    """Prochaine exécution : jours de semaine à HH:MM UTC (après la clôture D1)."""
+    from datetime import timedelta
+    h, m = (int(x) for x in hhmm.split(":"))
+    t = now.replace(hour=h, minute=m, second=0, microsecond=0)
+    if t <= now:
+        t += timedelta(days=1)
+    while t.weekday() >= 5:
+        t += timedelta(days=1)
+    return t
+
+
+def loop(hhmm: str = os.environ.get("SWINGBOT_HEURE_UTC", "22:15"), stop_event=None, log=print, run_kwargs=None):
+    """Mode service : reste actif et exécute run() chaque jour de semaine à l'heure donnée (UTC)."""
+    import time as _t
+    while stop_event is None or not stop_event.is_set():
+        nxt = next_run_time(datetime.now(timezone.utc), hhmm)
+        log(f"Prochaine exécution : {nxt:%A %d/%m %H:%M} UTC")
+        while datetime.now(timezone.utc) < nxt:
+            if stop_event is not None and stop_event.is_set():
+                return
+            _t.sleep(5)
+        try:
+            log(f"Résultat : {run(**(run_kwargs or {}))}")
+        except Exception as e:   # le service ne doit jamais s'arrêter sur une erreur
+            log(f"ERREUR pendant l'exécution : {e!r}")
+
+
 if __name__ == "__main__":
-    print(run())
+    import sys
+    if "--boucle" in sys.argv:
+        loop()
+    else:
+        print(run())

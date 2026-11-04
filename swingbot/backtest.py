@@ -58,7 +58,7 @@ def simulate(sym: str, df: pd.DataFrame, entry: pd.Series, exit_long: pd.Series 
     xs = exit_short.reindex(idx).fillna(False).to_numpy(bool) if exit_short is not None else np.zeros(n, bool)
     ev = event_days.reindex(idx).fillna(False).to_numpy(bool) if event_days is not None else np.zeros(n, bool)
     sw_long, sw_short = swap_rates(inst, rates, idx, markup=inst.swap_markup * cost.swap_markup_mult * cost.cost_mult) if cost.swaps else (np.zeros(n), np.zeros(n))
-    dow = idx.dayofweek.to_numpy()
+    dow = idx.day_of_week.to_numpy()
     if tf == "D1":
         night_w = np.where(dow == inst.triple_swap_day, 3.0, 1.0)  # nuit qui suit la bougie i
     else:  # H1 : swap prélevé au passage de 22h UTC (approximation du rollover 17h New York)
