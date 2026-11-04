@@ -12,7 +12,9 @@ def home() -> Path:
     if os.environ.get("SWINGBOT_HOME"):
         return Path(os.environ["SWINGBOT_HOME"])
     if getattr(sys, "frozen", False):           # application empaquetée (PyInstaller)
-        return Path(sys.executable).resolve().parent
+        d = Path(sys.executable).resolve().parent / "SwingbotData"
+        d.mkdir(exist_ok=True)
+        return d
     return Path(__file__).resolve().parents[1]
 
 

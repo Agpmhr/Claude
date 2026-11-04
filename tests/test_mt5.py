@@ -23,8 +23,10 @@ def fake_mt5(demo=True, positions=()):
     m.account_info = lambda: NS(trade_mode=0 if demo else 2, equity=10000.0, currency="EUR")
     m.positions_get = lambda **kw: [p for p in positions if not kw or p.ticket == kw.get("ticket")]
     m.symbol_select = lambda n, b: n in ("EURUSD", "USTEC")
-    m.symbol_info = lambda n: NS(volume_step=0.01, volume_min=0.01, trade_stops_level=10, point=1e-5, digits=5,
-                                 filling_mode=1)
+    m.symbol_info_exists = {"EURUSD", "USTEC"}
+    m.symbol_info = lambda n: (NS(volume_step=0.01, volume_min=0.01, trade_stops_level=10, point=1e-5, digits=5,
+                                  filling_mode=1) if n in m.symbol_info_exists else None)
+    m.symbols_get = lambda: [NS(name=n, expiration_time=0, description="") for n in m.symbol_info_exists]
     m.symbol_info_tick = lambda n: NS(bid=1.1000, ask=1.1001)
     m.order_check = lambda req: NS(retcode=0, comment="")
     def send(req):
@@ -96,3 +98,44 @@ def test_close_reason_detects_expiry_vs_stop(monkeypatch):
     from swingbot.mt5_broker import MT5Broker
     assert MT5Broker("demo").close_reason(1) == "stop"
     assert MT5Broker("demo").close_reason(2) == "autre"
+
+
+
+def test_auto_connect_picks_logged_in_terminal(monkeypatch):
+    m = fake_mt5()
+    state = {}
+    def init(**kw):
+        state["path"] = kw.get("path")
+        return True
+    m.initialize = init
+    m.account_info = lambda: (NS(trade_mode=0, equity=5000.0, currency="EUR", login=123, server="ICMarketsEU-Demo")
+                              if state.get("path") == "C:/IC/terminal64.exe" else None)
+    monkeypatch.setitem(sys.modules, "MetaTrader5", m)
+    monkeypatch.delenv("MT5_PATH", raising=False)
+    import swingbot.mt5_broker as mb
+    monkeypatch.setattr(mb, "running_terminals", lambda: ["C:/MetaQuotes/terminal64.exe", "C:/IC/terminal64.exe"])
+    snap = mb.MT5Broker("demo").snapshot()
+    assert snap["login"] == 123 and state["path"] == "C:/IC/terminal64.exe"
+
+
+def test_auth_failure_message_is_explicit(monkeypatch):
+    m = fake_mt5()
+    m.initialize = lambda **kw: False
+    m.last_error = lambda: (-6, "Terminal: Authorization failed")
+    monkeypatch.setitem(sys.modules, "MetaTrader5", m)
+    import swingbot.mt5_broker as mb
+    monkeypatch.setattr(mb, "running_terminals", lambda: [])
+    with pytest.raises(RuntimeError, match="aucun compte"):
+        mb.MT5Broker("demo").snapshot()
+
+
+def test_resolve_future_with_expiry_suffix():
+    import time
+    from swingbot.mt5_broker import resolve_symbol
+    now = time.time()
+    m = NS(symbol_info=lambda n: None, symbol_select=lambda n, b: True,
+           symbols_get=lambda: [NS(name="WTI_X6", expiration_time=now + 86400),        # expire demain : roulé
+                                NS(name="WTI_Z6", expiration_time=now + 30 * 86400),
+                                NS(name="WTI_F7", expiration_time=now + 60 * 86400),
+                                NS(name="WTIUSD", expiration_time=0)])
+    assert resolve_symbol(m, "WTI") == "WTI_Z6"

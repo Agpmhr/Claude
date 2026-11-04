@@ -40,16 +40,63 @@ def from_mt5_symbol(name: str) -> str:
     return our_symbol(name)
 
 
+def running_terminals() -> list[str]:
+    """Chemins des terminaux MT5 (terminal64.exe) ouverts en ce moment (Windows)."""
+    import subprocess
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                              "(Get-Process terminal64 -ErrorAction SilentlyContinue).Path"],
+                             capture_output=True, text=True, timeout=20,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+    except Exception:
+        return []
+    return [line.strip() for line in out.splitlines() if line.strip().lower().endswith("terminal64.exe")]
+
+
+def installed_terminals() -> list[str]:
+    """Terminaux MT5 installés dans les dossiers habituels (pour la liste de l'application)."""
+    import glob
+    found = []
+    for base in (os.environ.get("ProgramFiles", r"C:\Program Files"), os.environ.get("ProgramFiles(x86)", ""),
+                 os.path.expanduser("~")):
+        if base:
+            found += glob.glob(os.path.join(base, "*", "terminal64.exe"))
+    return sorted(set(found))
+
+
+AUTH_HELP = ("Le terminal MT5 utilisé n'est connecté à aucun compte (erreur -6). Causes fréquentes : "
+             "(1) plusieurs MT5 installés et ce n'est pas le bon : ouvrez le MT5 connecté à votre compte démo "
+             "IC Markets, ou choisissez son terminal64.exe dans l'application ; "
+             "(2) le terminal affiche « Pas de connexion » ou « Compte invalide » : reconnectez-vous ; "
+             "(3) indiquez identifiant + serveur + mot de passe dans l'application pour une connexion automatique.")
+
+
 def connect(mode: str):
+    """Connexion « toute seule » : chemin indiqué, sinon chaque terminal MT5 OUVERT sur le PC,
+    sinon le terminal par défaut. On garde le premier qui est connecté à un compte."""
     mt5 = _mt5()
-    kw = {}
-    if os.environ.get("MT5_PATH"):
-        kw["path"] = os.environ["MT5_PATH"]
+    creds = {}
     if os.environ.get("MT5_LOGIN"):
-        kw.update(login=int(os.environ["MT5_LOGIN"]), password=os.environ.get("MT5_PASSWORD", ""),
-                  server=os.environ.get("MT5_SERVER", ""))
-    if not mt5.initialize(**kw):
-        raise RuntimeError(f"MT5 : initialisation impossible ({mt5.last_error()}). Le terminal est-il ouvert ?")
+        creds = dict(login=int(os.environ["MT5_LOGIN"]), password=os.environ.get("MT5_PASSWORD", ""),
+                     server=os.environ.get("MT5_SERVER", ""))
+    paths = [os.environ["MT5_PATH"]] if os.environ.get("MT5_PATH") else running_terminals() + [None]
+    errors = []
+    for path in paths:
+        kw = dict(creds)
+        if path:
+            kw["path"] = path
+        if mt5.initialize(**kw):
+            if mt5.account_info() is not None:
+                break
+            errors.append((path, "aucun compte connecté"))
+            mt5.shutdown()
+        else:
+            errors.append((path, mt5.last_error()))
+    else:
+        detail = " | ".join(f"{p or 'terminal par défaut'} : {e}" for p, e in errors)
+        auth = any("-6" in str(e) or "Authorization" in str(e) or "aucun compte" in str(e) for _, e in errors)
+        raise RuntimeError(f"MT5 : connexion impossible ({detail}). " + (AUTH_HELP if auth else
+                           "Le terminal MetaTrader 5 est-il ouvert ?"))
     acc = mt5.account_info()
     if acc is None:
         raise RuntimeError("MT5 : aucun compte connecté")
@@ -80,7 +127,8 @@ class MT5Broker:
                                 side=1 if p.type == mt5.POSITION_TYPE_BUY else -1, volume=p.volume,
                                 price=p.price_open, stop=p.sl, label=LABEL, open_ts=p.time))
             return dict(balance=float(acc.equity), currency=acc.currency, positions=pos, is_demo=acc.trade_mode ==
-                        mt5.ACCOUNT_TRADE_MODE_DEMO)
+                        mt5.ACCOUNT_TRADE_MODE_DEMO, login=getattr(acc, "login", "?"),
+                        server=getattr(acc, "server", "?"))
         finally:
             mt5.shutdown()
 
@@ -133,9 +181,10 @@ class MT5Broker:
                                     retcode=getattr(r, "retcode", None), ok=getattr(r, "retcode", None) ==
                                     mt5.TRADE_RETCODE_DONE, raison=c.comment))
             for o in orders:
-                name = mt5_symbol(o.sym)
-                if not mt5.symbol_select(name, True):
-                    out.append(dict(action="ordre", sym=o.sym, statut=f"symbole {name} introuvable")); continue
+                name = resolve_symbol(mt5, mt5_symbol(o.sym))
+                if not name:
+                    out.append(dict(action="ordre", sym=o.sym, statut=f"symbole {mt5_symbol(o.sym)} introuvable"))
+                    continue
                 info = mt5.symbol_info(name)
                 step = info.volume_step
                 vol = round(int(o.lots / step + 1e-9) * step, 8)
@@ -174,6 +223,55 @@ class MT5Broker:
         finally:
             mt5.shutdown()
         return out
+
+
+def resolve_symbol(mt5, name: str, roll_days: int = 3):
+    """Nom exact s'il existe, sinon le contrat future le plus proche (pas à moins de roll_days de l'échéance)
+    parmi les symboles qui commencent par `name` suivi de _ . - ou d'un chiffre (ex. WTI -> WTI_Z6)."""
+    import time as _t
+    if mt5.symbol_info(name) is not None:
+        mt5.symbol_select(name, True)
+        return name
+    best, best_exp = None, None
+    for si in mt5.symbols_get() or []:
+        n = si.name
+        if not n.startswith(name) or len(n) == len(name):
+            continue
+        c = n[len(name)]
+        if c not in "_.- " and not c.isdigit():
+            continue
+        exp = getattr(si, "expiration_time", 0) or 0
+        if exp and exp < _t.time() + roll_days * 86400:
+            continue
+        if best is None or (exp and (best_exp is None or exp < best_exp)):
+            best, best_exp = n, exp
+    if best:
+        mt5.symbol_select(best, True)
+    return best
+
+
+def check_symbols(mode: str, syms: list[str] | None = None) -> list[str]:
+    """Vérifie que les instruments du système existent chez le broker ; sinon liste les symboles proches."""
+    from .live import SYSTEMS, SYSTEM_NAME
+    syms = syms or SYSTEMS[SYSTEM_NAME]["universe"]
+    mt5, _ = connect(mode)
+    lines = []
+    try:
+        missing = False
+        for s in syms:
+            r = resolve_symbol(mt5, mt5_symbol(s))
+            lines.append(f"{s:7s} -> {r if r else 'INTROUVABLE (' + mt5_symbol(s) + ')'}")
+            missing |= r is None
+        if missing:
+            keys = ("WTI", "BRENT", "OIL", "XTI", "XBR", "GC", "GOLD", "XAU", "DXY", "USDX")
+            cand = [si.name for si in (mt5.symbols_get() or [])
+                    if any(si.name.upper().startswith(k) or k in (si.description or "").upper() for k in keys)]
+            lines.append("Symboles proches chez ce broker : " + (", ".join(cand[:30]) or "(aucun)"))
+            lines.append("-> si vous êtes sur le serveur de démo MetaQuotes, ouvrez un compte démo IC Markets "
+                         "(Fichier > Ouvrir un compte) : les futures sans swap n'existent que là.")
+    finally:
+        mt5.shutdown()
+    return lines
 
 
 def export_history(syms: list[str], bars: int = 5000, out_dir=None, mode: str = "demo"):

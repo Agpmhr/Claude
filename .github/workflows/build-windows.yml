@@ -8,6 +8,9 @@ on:
     branches: [main, swingbot]
     paths: ["swingbot/**", "mt5/**", "app_main.py", "tests/**", ".github/workflows/build-windows.yml"]
 
+permissions:
+  contents: write     # pour publier la Release (page de téléchargement)
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -95,3 +98,30 @@ jobs:
             mt5/compile.log
             mt5/LISEZMOI_MT5.md
           if-no-files-found: warn
+
+      - name: Préparer les zips
+        if: success()
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\Swingbot.exe, mt5\SwingbotV4.ex5, mt5\LISEZMOI_MT5.md -DestinationPath Swingbot-windows.zip
+          Compress-Archive -Path mt5\SwingbotV4.ex5, mt5\LISEZMOI_MT5.md -DestinationPath SwingbotV4-expert-MT5.zip
+
+      - name: Publier la Release (page de téléchargement)
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v4-build-${{ github.run_number }}
+          name: Swingbot v4 — build ${{ github.run_number }} (${{ github.ref_name }})
+          prerelease: ${{ github.ref_name != 'main' }}
+          make_latest: ${{ github.ref_name == 'main' }}
+          files: |
+            Swingbot-windows.zip
+            SwingbotV4-expert-MT5.zip
+          body: |
+            **À télécharger :**
+            - **Swingbot-windows.zip** : Swingbot.exe (application Windows), SwingbotV4.ex5 (Expert MT5) et le mode d'emploi
+            - **SwingbotV4-expert-MT5.zip** : seulement l'Expert MT5 (petit fichier)
+
+            Windows peut afficher « Windows a protégé votre ordinateur » (application non signée) :
+            cliquer sur **Informations complémentaires** puis **Exécuter quand même**.
+            DÉMO uniquement — voir LISEZMOI_MT5.md.
