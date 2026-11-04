@@ -32,6 +32,7 @@ input ENUM_SB_MODE InpMode   = SB_AUTO;
 input bool   InpOpenCharts   = true;   // mode automatique : ouvrir un graphique D1 par instrument
 input string InpPairs        = "";     // vide = détection auto ; sinon « Signal>Future;... » ex. XTIUSD>WTI;XAUUSD>GC
 input string InpCompatible   = "XTIUSD>WTI;XBRUSD>BRENT;XAUUSD>GC;SYNTH_DXY>DXY"; // table de compatibilité testée
+input bool   InpSpotFallback = false;  // si aucun future : trader le CFD au comptant (SWAPS PAYÉS, non validé !)
 input string InpFxSuffix     = "";        // suffixe des paires forex (ex. ".a") pour le dollar synthétique
 input group "=== Stratégie (ne pas modifier sans re-tester) ==="
 input string InpLookbacks    = "55,100,150"; // canaux de Donchian (jours)
@@ -131,6 +132,33 @@ datetime RollLimit() { return TimeCurrent() + InpRollDays * 86400; }
 
 // Une instance « automatique » qui tourne interdit aux instances « graphique » de trader (pas de doublons)
 bool AutoInstanceAlive() { return TimeCurrent() - (datetime)GV("autoBeat", 0) < 5 * 60; }
+
+// Liste les symboles du broker qui ressemblent à du pétrole, de l'or ou du dollar (pour trouver les bons noms)
+string Diagnose()
+{
+   string keys[] = {"WTI", "BRENT", "OIL", "XTI", "XBR", "CL", "GC", "GOLD", "XAU", "DXY", "USDX", "DOLLAR"};
+   string out = "";
+   int found = 0, total = SymbolsTotal(false);
+   for(int i = 0; i < total && found < 40; i++)
+   {
+      string sname = SymbolName(i, false);
+      string up = sname; StringToUpper(up);
+      string desc = SymbolInfoString(sname, SYMBOL_DESCRIPTION); StringToUpper(desc);
+      bool hit = false;
+      for(int k = 0; k < ArraySize(keys) && !hit; k++)
+         hit = StringFind(up, keys[k]) == 0 || StringFind(desc, keys[k]) >= 0;
+      if(!hit) continue;
+      datetime exp = (datetime)SymbolInfoInteger(sname, SYMBOL_EXPIRATION_TIME);
+      string line = StringFormat("%s  [%s]  %s%s", sname, SymbolInfoString(sname, SYMBOL_PATH),
+                                 SymbolInfoString(sname, SYMBOL_DESCRIPTION),
+                                 exp > 0 ? "  échéance " + TimeToString(exp, TIME_DATE) : "");
+      Log("Symbole candidat : " + line);
+      out += sname + (exp > 0 ? "(" + TimeToString(exp, TIME_DATE) + ")" : "") + "  ";
+      found++;
+   }
+   Log(StringFormat("Diagnostic : %d symboles candidats sur %d chez ce broker", found, total));
+   return out;
+}
 
 bool SignalAvailable(string sig)
 {
@@ -517,9 +545,18 @@ int OnInit()
       StringTrimLeft(ab[0]); StringTrimRight(ab[0]); StringTrimLeft(ab[1]); StringTrimRight(ab[1]);
       if(InpMode == SB_CHART && StringFind(chartSym, ab[1]) != 0 && chartSym != ab[0]) continue;
       string tr = ResolveTrade(ab[1], RollLimit());
-      if(tr == "" || !SignalAvailable(ab[0]))
+      bool sigOk = SignalAvailable(ab[0]);
+      if(tr == "" && InpSpotFallback && sigOk && ab[0] != "SYNTH_DXY")
       {
-         Log("Non compatible chez ce broker (ignoré) : " + ab[0] + " > " + ab[1]);
+         tr = ab[0];
+         Log("ATTENTION : future « " + ab[1] + " » absent -> repli sur le CFD au comptant " + tr +
+             " (swaps payés chaque nuit : ce n'est PAS la stratégie validée par le backtest)");
+      }
+      if(tr == "" || !sigOk)
+      {
+         Log("Non compatible (ignoré) : " + ab[0] + " > " + ab[1] + " : " +
+             (tr == "" ? "aucun future dont le nom commence par « " + ab[1] + " »" : "") +
+             (!sigOk ? " ; série de signal « " + ab[0] + " » introuvable" : ""));
          continue;
       }
       int k = gNP++;
@@ -533,9 +570,15 @@ int OnInit()
    }
    if(gNP == 0)
    {
-      Alert(InpMode == SB_CHART ? "Swingbot : l'instrument de ce graphique n'est pas compatible (" + chartSym + ")."
-                                : "Swingbot : aucun instrument compatible trouvé chez ce broker.");
-      return INIT_FAILED;
+      string cand = Diagnose();
+      Alert("Swingbot : aucun future compatible trouvé. Symboles proches chez ce broker : ",
+            cand == "" ? "(aucun)" : cand,
+            "  -> voir l'onglet Experts, puis renseigner le paramètre InpPairs (ex. XTIUSD>NOM_DU_FUTURE).");
+      Comment("SWINGBOT v4 : aucun future compatible trouvé.\n"
+              "Symboles proches : " + (cand == "" ? "(aucun)" : cand) + "\n"
+              "Ouvrez l'onglet « Experts » (lignes « Symbole candidat ») et renseignez InpPairs,\n"
+              "ou activez InpSpotFallback (CFD au comptant, swaps payés, NON validé).");
+      return INIT_SUCCEEDED;   // on reste attaché pour que le message reste visible (aucun trade)
    }
    if(InpMode == SB_AUTO && InpOpenCharts) OpenCharts();
    gNL = MathMin(StringSplit(InpLookbacks, ',', lk), MAXL);
