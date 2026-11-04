@@ -64,6 +64,49 @@
 
 ---
 
+## 🆕 Vague 3 et dimensionnement (nuit du 4 au 5 nov., suite)
+
+### MetaTrader 5
+Le bot tourne aussi sous **MT5** : `swingbot/mt5_broker.py`, `mt5/LISEZMOI_MT5.md`, `mt5/lancer_swingbot_mt5.bat`.
+- Mêmes garde-fous qu'avec cTrader : démo vérifiée et réel verrouillé.
+- Le bot ne gère que ses positions (numéro magique 20261105).
+- L'historique peut être exporté depuis MT5 pour recaler le backtest sur les vraies bougies du broker.
+- 4 tests utilisent un faux module MT5. ⚠️ Rien n'a été essayé avec un vrai terminal : le premier lancement doit se faire en démo, avec vous devant l'écran.
+
+### Vague 3 : 5 nouvelles idées, **aucune ne passe le tamis**
+Même règle : au moins 3 réglages sur 4 positifs en entraînement **et** en validation, sur l'univers de recherche.
+| Idée | Réglages positifs sur les 2 blocs | Verdict |
+|---|---|---|
+| trend_carry : tendance FX seulement dans le sens du swap positif (idée maison) | 0/4, forte perte en entraînement | ✘ |
+| fx_rev_xs : retournement hebdomadaire transversal du FX | 0/4, négatif en entraînement | ✘ |
+| squeeze : contraction de volatilité, puis entrée dans le sens de la tendance | 1/4 | ✘ |
+| idx_dip_vix : rachat de repli seulement quand le VIX est élevé | 2/4, le plus proche | ✘ |
+| fx_dip_carry : rachat de repli FX dans le sens du swap (idée maison) | 1/4 | ✘ |
+
+Aucune n'a donc été présentée à l'univers réservé. **Total : 92 réglages testés depuis le début.** Le système v2 reste le seul candidat.
+
+### Combien risquer ? (système v2 inchangé, 32 instruments, 2010-2026, `results/v2_sizing.csv`)
+| Capital | Risque/trade | Rendement/an | Pire baisse | Gain moyen/an |
+|---|---|---|---|---|
+| 200 € | 0,75 % | +0,8 % | -6 % | ≈ 2 € |
+| 1 000 € | 0,75 % | +1,1 % | -9 % | ≈ 11 € |
+| 1 000 € | 1 % | +1,7 % | -12 % | ≈ 17 € |
+| 3 000 € | 0,75 % | +2,1 % | -13 % | ≈ 63 € |
+| 10 000 € | 0,75 % | +1,9 % | -13 % | ≈ 190 € |
+| 10 000 € | 1 % | +2,5 % | -18 % | ≈ 250 € |
+| 10 000 € | 1,5 % | **+1,0 %** | -21 % | le coupe-circuit à -20 % arrête le bot |
+
+- **Au-delà de 1 % de risque par trade, ça casse** : le drawdown touche -20 %, le coupe-circuit coupe tout, et le rendement s'effondre. **Gardez 0,75 %.**
+- Sous 1 000 €, v2 = **idx_dip seul** dans les faits : le lot minimum de 0,01 en forex rend le carry impossible, alors que la granularité des indices le permet encore.
+- Le Sharpe reste d'environ 0,4 quel que soit le réglage. Le dimensionnement ne crée pas d'avantage, il ne fait que le multiplier, lui et le risque.
+
+### Ce que je n'ai pas pu faire, et qui pourrait changer la donne
+1. **Le H1 sur 10 ans** (Dukascopy depuis votre PC). Avec 2 ans de H1 Yahoo, impossible de valider quoi que ce soit en intraday.
+2. **Une exécution plus fine** : entrer sur `idx_dip` juste avant la clôture plutôt qu'à l'ouverture suivante. Il faut des données intraday pour le mesurer honnêtement.
+3. **Les vraies bougies du broker** : `scripts/export_mt5_history.py`, puis relancer `scripts/ideas_final.py`.
+
+---
+
 # Vague 1 (archive)
 
 ## Verdict en une phrase
