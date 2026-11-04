@@ -172,7 +172,8 @@ class CTraderBroker:
 # noms des symboles chez IC Markets (cTrader) quand ils diffèrent des nôtres
 BROKER_NAMES = {"NAS100": "USTEC", "GER40": "DE40",
                 # futures CFD (MT4/MT5 uniquement chez IC Markets) ; ajustable via SWINGBOT_MT5_MAP (JSON)
-                "WTIF": "WTI", "BRENTF": "BRENT", "DXYF": "DXY", "GOLDF": "GC", "VIXF": "VIX"}
+                "WTIF": "WTI", "BRENTF": "BRENT", "DXYF": "DXY", "GOLDF": "GC", "VIXF": "VIX",
+                "CORNF": "Corn", "WHEATF": "Wheat", "SOYF": "Sbean", "SUGARF": "Sugar"}
 if os.environ.get("SWINGBOT_MT5_MAP"):
     import json as _json
     BROKER_NAMES.update(_json.loads(os.environ["SWINGBOT_MT5_MAP"]))
